@@ -1,0 +1,31 @@
+# Hạ tầng local cho dev: Postgres (database thật) + Mailpit (SMTP giả lập, có Web UI xem
+# email đã "gửi" — không gửi email thật ra ngoài, an toàn để test).
+#
+# Dùng: docker compose up -d
+# Version image được GHIM (không dùng "latest") để cả nhóm chạy cùng 1 phiên bản, tránh lỗi
+# "máy tôi chạy được mà máy bạn không chạy được".
+services:
+  postgres:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-clinic_booking}
+      POSTGRES_USER: ${DB_USERNAME:-clinic}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-clinic}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - clinic_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-clinic} -d ${DB_NAME:-clinic_booking}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    ports:
+      - "${MAIL_PORT:-1025}:1025" # SMTP — app gửi email vào đây
+      - "8025:8025" # Web UI + REST API để xem email đã "gửi": http://localhost:8025
+
+volumes:
+  clinic_postgres_data:

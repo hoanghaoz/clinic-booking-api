@@ -1,0 +1,53 @@
+name: "✨ Tính năng mới (Feature request)"
+description: Đề xuất/lên kế hoạch 1 tính năng cho clinic-booking-api
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      description: Tính năng thuộc module nào? (xem bảng module trong README)
+      options:
+        - identity
+        - facility
+        - catalog
+        - doctor
+        - schedule
+        - patient
+        - booking
+        - reception
+        - examination
+        - billing
+        - violation
+        - corporate
+        - notification
+        - reporting
+        - shared
+        - build/ci/hạ tầng
+    validations:
+      required: true
+  - type: input
+    id: sprint
+    attributes:
+      label: Sprint
+      description: "Sprint dự kiến làm, vd: Sprint 1 (2026-09-29 → 2026-10-12)"
+      placeholder: Sprint ...
+    validations:
+      required: false
+  - type: textarea
+    id: description
+    attributes:
+      label: Mô tả tính năng
+      description: Tính năng làm gì? Tham chiếu mục nào trong docs/de-tai.md nếu có.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Tiêu chí hoàn thành (Acceptance criteria)
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: false

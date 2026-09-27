@@ -1,0 +1,18 @@
+# Profile prod — CHƯA sẵn sàng deploy thật (xem "Quyết định còn mở" trong README: JWT,
+# mã hoá cột nhạy cảm... đều chưa làm). Tắt Swagger UI/API docs công khai để không lộ cấu
+# trúc API; mọi secret phải đọc từ biến môi trường (.env.example), KHÔNG hardcode ở đây.
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
+
+management:
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: warn
+    com.se100.clinic: info

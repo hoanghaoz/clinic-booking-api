@@ -1,0 +1,11 @@
+# Profile dev — dùng khi chạy local (./gradlew bootRun), kết hợp docker-compose.yml
+# (Postgres + Mailpit). Đây là profile MẶC ĐỊNH (xem application.yml).
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.se100.clinic: debug
+    org.hibernate.SQL: debug

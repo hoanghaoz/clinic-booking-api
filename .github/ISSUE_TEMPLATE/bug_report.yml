@@ -1,0 +1,67 @@
+name: "🐛 Báo lỗi (Bug report)"
+description: Báo lỗi trong hệ thống clinic-booking-api
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      description: Lỗi thuộc module nào? (xem bảng module trong README)
+      options:
+        - identity
+        - facility
+        - catalog
+        - doctor
+        - schedule
+        - patient
+        - booking
+        - reception
+        - examination
+        - billing
+        - violation
+        - corporate
+        - notification
+        - reporting
+        - shared
+        - build/ci/hạ tầng
+    validations:
+      required: true
+  - type: input
+    id: sprint
+    attributes:
+      label: Sprint
+      description: "Sprint hiện tại, vd: Sprint 1 (2026-09-29 → 2026-10-12)"
+      placeholder: Sprint ...
+    validations:
+      required: false
+  - type: textarea
+    id: description
+    attributes:
+      label: Mô tả lỗi
+      description: Chuyện gì đã xảy ra? Khác gì so với mong đợi?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Các bước tái hiện
+      placeholder: |
+        1. Gọi API ...
+        2. ...
+        3. Lỗi xuất hiện
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Kết quả mong đợi
+    validations:
+      required: false
+  - type: textarea
+    id: env
+    attributes:
+      label: Môi trường
+      placeholder: "OS, JDK version, branch/commit, profile (dev/test/prod)..."
+    validations:
+      required: false

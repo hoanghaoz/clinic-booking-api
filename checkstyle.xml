@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+  Checkstyle rút gọn, dành cho người mới học Java/Spring.
+
+  QUAN TRỌNG: build.gradle.kts đã đặt `isIgnoreFailures = true`, tức là
+  Checkstyle KHÔNG BAO GIỜ làm build đỏ — chỉ in cảnh báo ra console/report
+  ở build/reports/checkstyle/. Xem docs/setup/DECISIONS.md mục 6 để biết lý
+  do và cách chuyển sang chế độ "fail build" khi cả nhóm đã quen code Java.
+
+  Bộ rule này CHỦ Ý chỉ chọn các lỗi thường gặp, dễ hiểu, dễ tự sửa — không
+  bật các rule khó (Javadoc bắt buộc, độ phức tạp cyclomatic...) để tránh
+  spam cảnh báo làm người mới nản.
+-->
+<module name="Checker">
+    <property name="charset" value="UTF-8"/>
+    <property name="severity" value="warning"/>
+
+    <!-- Mỗi dòng tối đa 120 ký tự (thoáng hơn chuẩn Google 100, dễ thở hơn cho beginner) -->
+    <module name="LineLength">
+        <property name="max" value="120"/>
+        <property name="ignorePattern" value="^import\s.*$"/>
+    </module>
+
+    <module name="TreeWalker">
+        <!-- Không dùng import kiểu "java.util.*" — phải import rõ từng class -->
+        <module name="AvoidStarImport"/>
+
+        <!-- Không được có 2 class top-level public trong cùng 1 file -->
+        <module name="OneTopLevelClass"/>
+
+        <!-- Tên class/interface: PascalCase -->
+        <module name="TypeName"/>
+
+        <!-- Tên method/biến: camelCase -->
+        <!-- Underscores allowed so test names can read like sentences: create_throwsConflict_whenCodeExists -->
+        <module name="MethodName">
+            <property name="format" value="^[a-z][a-zA-Z0-9_]*$"/>
+        </module>
+        <module name="LocalVariableName"/>
+        <module name="MemberName"/>
+        <module name="ParameterName"/>
+
+        <!-- Constants (static final): UPPER_SNAKE_CASE. Loggers named `log`/`logger` are allowed (Google style). -->
+        <module name="ConstantName">
+            <property name="format" value="^log(ger)?$|^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$"/>
+        </module>
+
+        <!-- Khối {} rỗng phải có comment giải thích tại sao rỗng, tránh "quên code" -->
+        <module name="EmptyBlock">
+            <property name="option" value="text"/>
+        </module>
+
+        <!-- Dấu { phải ở cuối dòng khai báo (kiểu K&R), không xuống dòng riêng -->
+        <module name="LeftCurly"/>
+
+        <!-- Luôn dùng { } cho if/for/while, kể cả khi chỉ có 1 dòng lệnh -->
+        <module name="NeedBraces"/>
+
+        <!-- Khoảng trắng quanh toán tử (a+b -> a + b) để dễ đọc -->
+        <module name="WhitespaceAround">
+            <property name="allowEmptyConstructors" value="true"/>
+            <property name="allowEmptyMethods" value="true"/>
+            <!-- google-java-format writes empty bodies as `{}` (e.g. `class Foo {}`, `record R(...) {}`) -->
+            <property name="allowEmptyTypes" value="true"/>
+            <property name="allowEmptyLambdas" value="true"/>
+        </module>
+
+        <!-- Không được == so sánh String (phải dùng .equals()) — lỗi rất hay gặp -->
+        <module name="StringLiteralEquality"/>
+
+        <!-- Cảnh báo khi package không khớp thư mục (dễ gây lỗi import chéo module) -->
+        <module name="PackageDeclaration"/>
+    </module>
+</module>

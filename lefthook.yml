@@ -1,0 +1,29 @@
+# Cấu hình Lefthook (https://lefthook.dev) — Git hooks manager.
+#
+# Cài tự động: chạy `./gradlew build` lần đầu (xem task `installGitHooks` trong
+# build.gradle.kts). Cài tay: `npx lefthook install`.
+#
+# Nguyên tắc: tooling phải GIÚP, không được CHẶN — trừ 2 ngoại lệ được phép chặn:
+# (1) gitleaks phát hiện secret thật, (2) commit message/branch name sai định dạng rõ ràng.
+# Formatting KHÔNG bao giờ chặn commit (tự sửa rồi commit tiếp).
+
+pre-commit:
+  commands:
+    spotless-format:
+      glob: "*.java"
+      run: ./gradlew spotlessApply
+      stage_fixed: true
+    gitleaks-secret-scan:
+      run: ./scripts/lefthook/gitleaks-scan.sh
+
+commit-msg:
+  commands:
+    conventional-commit:
+      run: ./scripts/lefthook/validate-commit-msg.sh {1}
+
+pre-push:
+  commands:
+    no-direct-main-push:
+      run: ./scripts/lefthook/check-not-main.sh
+    unit-tests:
+      run: ./gradlew test

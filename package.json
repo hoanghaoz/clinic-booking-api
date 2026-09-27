@@ -1,0 +1,8 @@
+{
+  "name": "clinic-booking-api-git-hooks",
+  "private": true,
+  "description": "Chỉ dùng để cài Lefthook (Git hooks) qua npm — đây KHÔNG phải project Node.js. Backend thật là Java/Spring Boot, xem build.gradle.kts.",
+  "devDependencies": {
+    "lefthook": "2.1.14"
+  }
+}

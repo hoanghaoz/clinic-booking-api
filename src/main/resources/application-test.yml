@@ -1,0 +1,9 @@
+# Profile test — dùng cho integration test (Testcontainers ghi đè spring.datasource.* lúc
+# chạy qua @DynamicPropertySource, xem SpecialtyControllerIntegrationTest).
+springdoc:
+  swagger-ui:
+    enabled: false
+
+logging:
+  level:
+    com.se100.clinic: info
