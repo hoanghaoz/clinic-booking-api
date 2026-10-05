@@ -1,5 +1,6 @@
 # Profile test — dùng cho integration test (Testcontainers ghi đè spring.datasource.* lúc
-# chạy qua @DynamicPropertySource, xem SpecialtyControllerIntegrationTest).
+# chạy qua @ServiceConnection, xem AbstractIntegrationTest). Tắt Swagger UI nhưng /v3/api-docs
+# vẫn bật vì OpenApiIntegrationTest kiểm tra nó.
 springdoc:
   swagger-ui:
     enabled: false
