@@ -13,4 +13,5 @@ reception/examination/billing/violation/corporate/notification/reporting/shared/
 - [ ] Migration Flyway (nếu có) đặt tên đúng quy ước `V<timestamp>__<module>_<mô tả>.sql`
 - [ ] Không log hoặc trả về response lỗi dữ liệu nhạy cảm (CCCD, tiền sử bệnh...)
 - [ ] Đã cập nhật Swagger/OpenAPI nếu có đổi API (tự động, chỉ cần kiểm tra `/v3/api-docs`)
+- [ ] Endpoint mới theo [quy ước API](../docs/conventions/api-conventions.md): response bọc `ApiResult`, danh sách dùng `PageParams`, lỗi nghiệp vụ có `code`
 - [ ] Đã tự chạy `./gradlew spotlessApply` (hoặc để pre-commit hook tự làm)

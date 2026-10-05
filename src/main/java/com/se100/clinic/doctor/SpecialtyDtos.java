@@ -1,5 +1,6 @@
 package com.se100.clinic.doctor;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
@@ -32,6 +33,9 @@ public final class SpecialtyDtos {
       @NotBlank(message = "Tên chuyên khoa không được để trống") @Size(max = 200) String name,
       String description) {}
 
+  // requiredProperties: fields that are always present in the JSON (nullable ones are left out), so
+  // the TypeScript type the frontend generates from OpenAPI is `id: number`, not `id?: number`.
+  @Schema(requiredProperties = {"id", "code", "name", "active", "createdAt", "updatedAt"})
   public record SpecialtyResponse(
       Long id,
       String code,

@@ -159,3 +159,75 @@ phương án nào. Cập nhật liên tục trong lúc dựng khung repo.
   module mới"). Bảng module trong README vẫn là nguồn tham chiếu tên package.
 - **Phương án đã loại:** tạo sẵn 13 package chỉ chứa `package-info.java` (làm trước đó, đã
   xoá).
+
+---
+
+## Quy ước API chung (Task 1 — nền tảng backend)
+
+Hợp đồng đầy đủ nằm ở [`docs/conventions/api-conventions.md`](../conventions/api-conventions.md); phần dưới
+chỉ ghi **vì sao** chọn như vậy và phương án đã loại.
+
+### 15. Wrapper response thành công: `ApiResult<T>` = `{data, meta?}`; DELETE giữ 204
+
+- **Quyết định:** mọi response thành công bọc trong `{"data": ...}`, danh sách thêm `"meta"`
+  (`ApiResult` trong `shared`). `DELETE` (xoá mềm) giữ `204` **không body**.
+- **Lý do:** FE luôn đọc `.data`, thêm metadata sau này không phá FE. Lỗi KHÔNG dùng wrapper này mà dùng
+  `ProblemDetail` (RFC 9457) sẵn có — FE phân biệt thành công/lỗi bằng HTTP status, không cần field
+  `success: true/false` thừa. DELETE không có dữ liệu để trả nên 204 là đúng ngữ nghĩa; thao tác nào cần
+  trả dữ liệu thì dùng `200` + wrapper (ghi trong tài liệu).
+- **Phương án đã loại:** wrapper `{success, data, error}` cho cả thành công lẫn lỗi (trùng lặp với
+  HTTP status, và phải bỏ `ProblemDetail` đã có); trả mảng/object trần (không mở rộng được);
+  DELETE trả `200` + wrapper rỗng (body vô nghĩa).
+- **Tên kiểu:** `ApiResult`, không phải `ApiResponse`, để không đụng `@ApiResponse` của Swagger
+  (cùng nằm trong controller).
+
+### 16. Phân trang: `page` từ 1, `size` 20 (tối đa 100), từ chối tham số sai
+
+- **Quyết định:** `page` bắt đầu từ **1**; `size` mặc định **20**, tối đa **100**; `sort=-field,field`.
+  Tham số sai → `400 VALIDATION_ERROR`, **không** tự kẹp/sửa. `meta` gồm `page, size, totalElements,
+  totalPages`. Page vượt cuối trả `200` + `data: []`.
+- **Lý do:** FE hiển thị "Trang 1" nên 1-based tránh lỗi lệch 1; từ chối thay vì kẹp để `meta.size` luôn
+  đúng cái FE hỏi. `-field` gọn và tránh bẫy của Spring: `sort=name,desc` bị bộ chuyển đổi tách theo dấu phẩy
+  thành 2 phần tử. Whitelist field sort tránh lộ field nội bộ (vd. cột nhạy cảm) và sort trên cột không index.
+  Tự động thêm `id` làm khoá sort cuối để phân trang ổn định.
+- **Cài đặt:** `PageParams` (record `page/size/sort`, bind bằng `@ParameterObject`) tự validate rồi đổi sang
+  `Pageable` 0-based của Spring Data — thay vì dùng `Pageable` trần của Spring (page 0-based, tự kẹp size,
+  sort kiểu `name,desc`, lỗi định dạng khác chuẩn lỗi của dự án).
+- **Phương án đã loại:** `spring.data.web.pageable.one-indexed-parameters` (làm `Page` JSON và `Pageable`
+  lệch 1, khó đoán); trả `Page<T>` serialize thẳng (lộ cấu trúc nội bộ của Spring, đổi theo version).
+- **Lọc:** dùng `JpaSpecificationExecutor` + `Specification` chỉ thêm điều kiện khi có tham số. Không dùng
+  JPQL kiểu `(:kw is null or ...)` vì PostgreSQL không suy ra được kiểu của tham số `null` (lỗi
+  `could not determine data type of parameter`/`lower(bytea)`).
+
+### 17. Mã lỗi: `code` trong ProblemDetail, enum `ErrorCode` theo module
+
+- **Quyết định:** mọi response lỗi có property `code`; `BusinessException(ErrorCode, message)` mang theo
+  status + mã. Mã dùng chung ở `CommonErrorCode`, mã nghiệp vụ ở enum riêng từng module
+  (`SpecialtyErrorCode`, sau này `BookingErrorCode.SLOT_FULL`...). Lỗi theo field là `errors: [{field, message}]`
+  với `code=VALIDATION_ERROR`.
+- **Lý do:** FE không được parse `detail` (tiếng Việt, đổi tự do). Enum theo module giữ quy tắc
+  "module không import nội bộ module khác" và tránh một file mã lỗi khổng lồ gây conflict khi merge.
+  `errors` là mảng (không phải map) vì một field có thể vi phạm nhiều luật.
+- **Phương án đã loại:** map mã lỗi vào `type` URI của ProblemDetail (FE phải parse URL); một enum chung
+  duy nhất trong `shared` (mọi người cùng sửa 1 file).
+
+### 18. Lỗi constraint DB → 4xx có mã, dịch theo SQLSTATE
+
+- **Quyết định:** `GlobalExceptionHandler` bắt `DataIntegrityViolationException`, đọc SQLSTATE
+  (`DbErrors`): unique→409 `DUPLICATE_RESOURCE`, FK→409 `REFERENCE_VIOLATION`, exclusion→409 `CONFLICT`,
+  not-null/check/lớp `22`→400 `INVALID_REQUEST`, còn lại→409 `DATA_INTEGRITY_VIOLATION`; sửa đồng thời
+  (`@Version`) → 409 `CONFLICT`. Service dịch sang mã riêng khi FE cần phân biệt (vd. unique của slot → `SLOT_FULL`).
+- **Lý do:** kiểm tra `existsBy...` trước khi ghi không chống được race; DB constraint mới là chốt chặn thật,
+  và khi nó nổ thì client phải nhận 4xx dễ hiểu, không phải 500. Chỉ log SQLSTATE + tên constraint vì message
+  của driver chứa giá trị cột (có thể là CCCD).
+- **Phương án đã loại:** parse tên constraint trong handler chung để ra mã nghiệp vụ (handler phải biết
+  nghiệp vụ của mọi module — đặt việc này ở Service của module).
+
+### 19. Integration test: container Postgres singleton + DB dùng chung
+
+- **Quyết định:** `AbstractIntegrationTest` khởi **một** container cho cả lượt chạy (static initializer),
+  mọi test HTTP kế thừa nó. DB không tự dọn giữa các test → mỗi test tự tạo dữ liệu có hậu tố ngẫu nhiên.
+- **Lý do:** Spring cache application context giữa các class test; với `@Container` static theo class, context
+  được cache sẽ trỏ vào container đã bị tắt. Một container cho cả lượt cũng nhanh hơn nhiều.
+- **Phương án đã loại:** `@Transactional` rollback sau mỗi test (không áp dụng được: request đi qua HTTP thật
+  ở thread khác); `TRUNCATE` sau mỗi test (chậm, dễ quên khi thêm bảng).
