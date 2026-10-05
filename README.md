@@ -12,6 +12,9 @@ nhánh) — xem mô tả nghiệp vụ đầy đủ ở [`docs/de-tai.md`](docs/
   [`docs/setup/DECISIONS.md`](docs/setup/DECISIONS.md).
 - Người mới học Java/Spring (từ nền C#/NestJS) nên đọc
   [`docs/JAVA_FOR_NESTJS_DEVS.md`](docs/JAVA_FOR_NESTJS_DEVS.md) trước.
+- **Quy ước API chung với FE** (dạng response, phân trang/lọc/sắp xếp, mã lỗi) — bắt buộc đọc
+  trước khi viết endpoint đầu tiên:
+  [`docs/conventions/api-conventions.md`](docs/conventions/api-conventions.md).
 
 ## Mục lục
 
@@ -20,10 +23,12 @@ nhánh) — xem mô tả nghiệp vụ đầy đủ ở [`docs/de-tai.md`](docs/
 - [Kiến trúc & quy tắc module](#kiến-trúc--quy-tắc-module)
 - [Bảng module](#bảng-module)
 - [Cách thêm 1 module mới](#cách-thêm-1-module-mới)
+- [Quy ước API (tóm tắt)](#quy-ước-api-tóm-tắt)
 - [Commit & branch convention](#commit--branch-convention)
 - [Git hooks (Lefthook)](#git-hooks-lefthook)
 - [Bảo mật](#bảo-mật)
 - [FE generate TypeScript type từ OpenAPI](#fe-generate-typescript-type-từ-openapi)
+- [Xử lý sự cố thường gặp](#xử-lý-sự-cố-thường-gặp)
 - [Cài đặt IntelliJ IDEA](#cài-đặt-intellij-idea)
 - [Bật branch protection cho main (làm tay trên GitHub)](#bật-branch-protection-cho-main-làm-tay-trên-github)
 - [Quyết định còn mở](#quyết-định-còn-mở)
@@ -42,6 +47,10 @@ nhánh) — xem mô tả nghiệp vụ đầy đủ ở [`docs/de-tai.md`](docs/
    ```bash
    cp .env.example .env
    ```
+   > ⚠️ `.env` **chỉ được `docker compose` đọc** (để đặt cổng/mật khẩu cho Postgres), còn
+   > `./gradlew bootRun` **KHÔNG tự đọc** file này. Nếu bạn đổi giá trị trong `.env` (vd. `DB_PORT`),
+   > phải đưa cùng giá trị đó cho app: `export DB_PORT=5433` trước khi `bootRun`, hoặc đặt
+   > Environment variables trong Run Configuration của IntelliJ.
 
 3. **Bật Postgres + Mailpit:**
    ```bash
@@ -49,25 +58,32 @@ nhánh) — xem mô tả nghiệp vụ đầy đủ ở [`docs/de-tai.md`](docs/
    ```
    - Postgres: `localhost:5432` (user/pass mặc định: `clinic`/`clinic`, DB `clinic_booking`).
    - Mailpit Web UI (xem email "đã gửi"): http://localhost:8025
+   - Cổng 5432 đã bị chiếm (vd. máy đang có Postgres khác)? Xem
+     [Xử lý sự cố thường gặp](#xử-lý-sự-cố-thường-gặp).
 
 4. **Build & chạy app:**
    ```bash
    ./gradlew bootRun
    ```
    Lần đầu chạy sẽ tự tải Gradle distribution + toàn bộ dependency (có thể mất vài phút tuỳ
-   mạng) và tự cài Git hooks (xem [Git hooks (Lefthook)](#git-hooks-lefthook)).
+   mạng). Flyway tự chạy migration khi app khởi động (xem log `Successfully applied N
+   migration`). Git hooks KHÔNG cài ở bước này — chúng chỉ được cài bởi `./gradlew build`
+   hoặc `npx lefthook install` (xem [Git hooks (Lefthook)](#git-hooks-lefthook)).
 
 5. **Kiểm tra:**
-   - Health check: http://localhost:8080/actuator/health → `{"status":"UP"}`
+   - Health check: http://localhost:8080/actuator/health → JSON có `"status":"UP"`
    - Swagger UI: http://localhost:8080/swagger-ui.html
    - OpenAPI spec (JSON): http://localhost:8080/v3/api-docs
+   - Thử API mẫu: `curl "http://localhost:8080/api/v1/specialties?page=1&size=10&sort=-createdAt"`
+     → `{"data": [...], "meta": {"page":1,"size":10,"totalElements":0,"totalPages":0}}`
 
 ## Danh sách lệnh hay dùng
 
 | Lệnh | Mục đích |
 |---|---|
-| `./gradlew bootRun` | Chạy app (profile mặc định: `dev`) |
-| `./gradlew build` | Build đầy đủ: compile + unit test + package jar + cài Git hooks |
+| `./gradlew bootRun` | Chạy app (profile mặc định: `dev`), dùng Postgres của `docker compose` |
+| `./gradlew bootTestRun` | Chạy app với Postgres tự khởi bằng Testcontainers (cần Docker, KHÔNG cần `docker compose up`, không đụng cổng 5432) |
+| `./gradlew build` | Build đầy đủ: compile + unit test + package jar, rồi cài Git hooks (cần `npm`) |
 | `./gradlew test` | Chỉ chạy unit test (nhanh, KHÔNG cần Docker) |
 | `./gradlew integrationTest` | Chạy integration test (Testcontainers, CẦN Docker đang chạy) |
 | `./gradlew spotlessApply` | Tự động format code theo google-java-format |
@@ -94,7 +110,8 @@ com.se100.clinic
 │   ├── BookingDtos.java          ← record DTO, public nếu module khác cần
 │   └── AppointmentCancelled.java ← domain event, public
 ├── doctor/    ← MODULE MẪU, xem chi tiết bên dưới
-├── shared/    ← exception, audit entity, Role — module khác được import trực tiếp
+├── shared/    ← ApiResult/PageParams, exception + ErrorCode, audit entity, Role — module khác
+│                được import trực tiếp
 └── config/    ← cấu hình framework (Security/CORS/OpenAPI/Scheduling), không phải "module"
 ```
 
@@ -139,7 +156,7 @@ class ModularityTests {
 | `identity` | Tài khoản, Role, phân quyền, JWT | Chưa tạo |
 | `facility` | Cơ sở, phòng chức năng | Chưa tạo |
 | `catalog` | Gói khám/Dịch vụ/Hạng mục (GoiKham/DichVu/HangMucKham), có versioning | Chưa tạo |
-| **`doctor`** | Chuyên khoa/Bác sĩ (ChuyenKhoa/BacSi) | **Đầy đủ — module mẫu (Specialty CRUD)** |
+| **`doctor`** | Chuyên khoa/Bác sĩ (ChuyenKhoa/BacSi) | **Đầy đủ — module mẫu (Specialty CRUD + phân trang/lọc/sắp xếp + mã lỗi riêng)** |
 | `schedule` | Lịch làm việc, ca, sức chứa slot | Chưa tạo |
 | `patient` | Bệnh nhân, thẻ điện tử, tiền sử bệnh | Chưa tạo |
 | `booking` | Đặt lịch, Phiếu đặt lịch (QR), hủy/đổi, Waitlist | Chưa tạo |
@@ -150,22 +167,40 @@ class ModularityTests {
 | `corporate` | Doanh nghiệp, hợp đồng, upload danh sách khám | Chưa tạo |
 | `notification` | Email + in-app (KHÔNG dùng Zalo/SMS) | Chưa tạo |
 | `reporting` | Báo cáo thống kê (chỉ đọc) | Chưa tạo |
-| `shared` | Exception, audit base entity, kiểu dùng chung | **Đầy đủ — nền tảng** |
+| `shared` | Response wrapper, phân trang, exception/mã lỗi, audit base entity, kiểu dùng chung | **Đầy đủ — nền tảng** |
 
 ## Cách thêm 1 module mới
 
 1. Tạo package mới `com.se100.clinic.<tên-module>` (tên lấy đúng theo bảng module ở trên).
 2. Mở package `doctor` làm mẫu, copy cấu trúc file (không copy nội dung nghiệp vụ):
    `XxxController`, `XxxService`, `XxxRepository`, `Xxx` (entity), `XxxDtos`,
-   `package-info.java`.
+   `XxxErrorCode` (mã lỗi nghiệp vụ của module), `package-info.java`.
 3. Viết Flyway migration: `src/main/resources/db/migration/V<yyyyMMdd_HHmm>__<module>_<mô
    tả>.sql` (dùng timestamp, không dùng số tăng dần — tránh đụng version khi nhiều người
    tạo migration song song, xem ví dụ `V20260927_1500__doctor_create_specialty.sql`).
-4. Viết unit test (Mockito, ở `src/test/java`) + integration test (Testcontainers, ở
-   `src/integrationTest/java`) — theo mẫu ở `doctor`.
+4. Viết test theo mẫu ở `doctor`: unit test Service (Mockito) + test hợp đồng HTTP của
+   Controller (MockMvc) ở `src/test/java`, và integration test (Testcontainers, kế thừa
+   `AbstractIntegrationTest`) ở `src/integrationTest/java`. Danh sách test cần có: xem
+   [`docs/conventions/api-conventions.md`](docs/conventions/api-conventions.md) mục 5.
 5. Nếu module cần dữ liệu từ module khác: gọi `Service` public của module đó, KHÔNG import
    `Repository`/`Entity`.
-6. Chạy `./gradlew spotlessApply test` trước khi commit (hoặc để pre-commit hook tự format).
+6. Controller trả `ApiResult<...>`, danh sách dùng `PageParams`, lỗi nghiệp vụ ném `BusinessException`
+   với mã trong `XxxErrorCode` — theo
+   [quy ước API](docs/conventions/api-conventions.md) (có checklist ở mục 6).
+7. Chạy `./gradlew spotlessApply test integrationTest` trước khi mở PR (pre-commit hook chỉ tự
+   format, `pre-push` chỉ chạy unit test).
+
+## Quy ước API (tóm tắt)
+
+Đầy đủ + ví dụ + cách áp dụng: [`docs/conventions/api-conventions.md`](docs/conventions/api-conventions.md).
+
+- **Thành công:** `{"data": ...}`; danh sách thêm `"meta": {page, size, totalElements, totalPages}`.
+  Tạo mới → `201` + `Location`; xoá → `204` không body.
+- **Phân trang:** `page` bắt đầu từ **1** (mặc định 1), `size` mặc định **20**, tối đa **100**,
+  `sort=-createdAt,name` (`-` = giảm dần, chỉ field được phép). Tham số sai → `400`, không tự sửa.
+- **Lỗi:** `application/problem+json` có `code` (FE rẽ nhánh theo `code`, không theo `detail`),
+  lỗi theo field có `errors: [{field, message}]`. Lỗi DB constraint → 409/400 có `code`, không bao giờ
+  500 chung.
 
 ## Commit & branch convention
 
@@ -246,6 +281,18 @@ npx openapi-typescript http://localhost:8080/v3/api-docs -o src/types/api.d.ts
 Mỗi khi API đổi (thêm field, đổi endpoint...), FE chỉ cần chạy lại lệnh trên để đồng bộ
 type — không cần định nghĩa tay.
 
+## Xử lý sự cố thường gặp
+
+| Triệu chứng | Nguyên nhân & cách xử lý |
+|---|---|
+| `docker compose up` báo `address already in use` / Postgres không lên (cổng 5432) | Máy đã có Postgres khác giữ cổng. Đổi cổng cho **cả Postgres lẫn app**: `DB_PORT=5433 docker compose up -d` rồi `DB_PORT=5433 ./gradlew bootRun`. Hoặc dùng `./gradlew bootTestRun` (Postgres Testcontainers, cổng ngẫu nhiên) |
+| Sửa `.env` mà app không đổi hành vi | `.env` chỉ `docker compose` đọc; app đọc **biến môi trường** của shell/IDE — xem bước 2 ở [Chạy local](#chạy-local-từng-bước) |
+| `Connection refused` tới `localhost:5432` lúc `bootRun` | Chưa `docker compose up -d`, hoặc Postgres đang dùng cổng khác (xem dòng đầu) |
+| `./gradlew integrationTest` lỗi `Could not find a valid Docker environment` | Docker daemon chưa chạy (Docker Desktop/`systemctl start docker`). `./gradlew test` thì không cần Docker |
+| Swagger UI 404 / trống | Swagger UI chỉ bật ở profile `dev` (mặc định); profile `test` tắt UI, profile `prod` tắt cả UI lẫn `/v3/api-docs` — có chủ đích |
+| FE nhận `400` khi gọi danh sách với `size=500` | Đúng thiết kế: `size` tối đa 100 và bị **từ chối** chứ không tự cắt. Xem [quy ước phân trang](docs/conventions/api-conventions.md#2-pagination-filter-sort) |
+| Push bị chặn `Không được push thẳng vào nhánh 'main'` | Hook `pre-push`. Tạo branch riêng rồi mở PR (xem [Commit & branch convention](#commit--branch-convention)) |
+
 ## Cài đặt IntelliJ IDEA
 
 1. **Chọn đúng JDK 25:** File → Project Structure → Project → SDK → chọn JDK 25 (nếu chưa
@@ -279,7 +326,10 @@ Những vấn đề kiến trúc CHƯA chốt, cả nhóm cần bàn khi triển
    slot cuối cùng cùng lúc thì xử lý sao? Ứng viên: optimistic locking (`@Version` trên
    entity slot) + retry ở tầng Service, hoặc constraint duy nhất ở DB
    (`unique(schedule_id, slot_index)` cho bookings) kết hợp bắt `DataIntegrityViolationException`
-   trả về lỗi "hết chỗ".
+   trả về lỗi "hết chỗ". Phần hạ tầng đã có sẵn: `DbErrors` để nhận ra loại vi phạm và
+   `GlobalExceptionHandler` đã đổi unique/exclusion/`@Version` thành `409` (xem
+   [mục 3.6](docs/conventions/api-conventions.md#36-lỗi-từ-constraint-db)); module `booking` chỉ
+   cần dịch sang mã riêng `SLOT_FULL`.
 2. **Mã hoá CCCD/hộ chiếu** (module `patient`): xem đề xuất sơ bộ ở mục
    [Bảo mật](#bảo-mật) — cần quyết định thuật toán, nơi lưu khoá, và có cần tra cứu theo
    CCCD hay không (ảnh hưởng cách thiết kế cột hash).
