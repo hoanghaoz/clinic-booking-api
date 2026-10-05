@@ -2,6 +2,7 @@ package com.se100.clinic.doctor;
 
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 /**
  * package-private — CHỈ {@link SpecialtyService} (cùng package) được phép dùng repository này.
@@ -13,8 +14,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * <p>{@code JpaRepository<Specialty, Long>} tương đương {@code Repository<Specialty>} của TypeORM
  * hoặc {@code DbSet<Specialty>} của EF Core — Spring Data JPA tự sinh implementation lúc chạy
  * (proxy), bạn không cần viết class implement interface này.
+ *
+ * <p>{@link JpaSpecificationExecutor} thêm {@code findAll(Specification, Pageable)} — dùng để ghép
+ * filter tuỳ chọn (chỉ áp điều kiện khi tham số có giá trị) cùng phân trang/sắp xếp, xem {@link
+ * SpecialtyService#list}.
  */
-interface SpecialtyRepository extends JpaRepository<Specialty, Long> {
+interface SpecialtyRepository
+    extends JpaRepository<Specialty, Long>, JpaSpecificationExecutor<Specialty> {
 
   Optional<Specialty> findByCode(String code);
 

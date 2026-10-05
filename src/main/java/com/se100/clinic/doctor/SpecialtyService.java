@@ -4,8 +4,18 @@ import com.se100.clinic.doctor.SpecialtyDtos.CreateSpecialtyRequest;
 import com.se100.clinic.doctor.SpecialtyDtos.SpecialtyResponse;
 import com.se100.clinic.doctor.SpecialtyDtos.UpdateSpecialtyRequest;
 import com.se100.clinic.shared.ConflictException;
+import com.se100.clinic.shared.DbErrors;
 import com.se100.clinic.shared.NotFoundException;
+import jakarta.persistence.criteria.Predicate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +34,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SpecialtyService {
 
+  /**
+   * Fields {@code GET /specialties} may be sorted by. They are API field names AND entity property
+   * names (keep them identical), so only expose fields that are indexed or cheap to sort.
+   */
+  public static final Set<String> SORTABLE_FIELDS = Set.of("code", "name", "active", "createdAt");
+
+  /** Used when the client sends no {@code sort}. */
+  public static final Sort DEFAULT_SORT = Sort.by("name");
+
   private final SpecialtyRepository specialtyRepository;
 
   // Constructor injection: Spring tự tìm bean SpecialtyRepository và truyền vào đây khi khởi
@@ -38,15 +57,34 @@ public class SpecialtyService {
   @Transactional
   public SpecialtyResponse create(CreateSpecialtyRequest request) {
     if (specialtyRepository.existsByCode(request.code())) {
-      throw new ConflictException("Mã chuyên khoa đã tồn tại: " + request.code());
+      throw codeExists(request.code());
     }
     Specialty specialty = new Specialty(request.code(), request.name(), request.description());
-    return SpecialtyResponse.from(specialtyRepository.save(specialty));
+    try {
+      // saveAndFlush: make the INSERT run now so a unique-constraint violation surfaces inside this
+      // try block (not at commit). Two requests can both pass existsByCode above; the DB unique
+      // constraint is the real guard, and we translate its violation into the same business code.
+      return SpecialtyResponse.from(specialtyRepository.saveAndFlush(specialty));
+    } catch (DataIntegrityViolationException e) {
+      if (DbErrors.isUniqueViolation(e)) {
+        throw codeExists(request.code());
+      }
+      throw e;
+    }
   }
 
+  /**
+   * One page of specialties. Both filters are optional.
+   *
+   * @param keyword case-insensitive "contains" match on name or code; blank = no filter
+   * @param active exact match; {@code null} = both active and inactive
+   * @param pageable already validated by {@code PageParams#toPageable}
+   */
   @Transactional(readOnly = true)
-  public List<SpecialtyResponse> list() {
-    return specialtyRepository.findAll().stream().map(SpecialtyResponse::from).toList();
+  public Page<SpecialtyResponse> list(String keyword, Boolean active, Pageable pageable) {
+    return specialtyRepository
+        .findAll(matching(keyword, active), pageable)
+        .map(SpecialtyResponse::from);
   }
 
   @Transactional(readOnly = true)
@@ -78,6 +116,38 @@ public class SpecialtyService {
   private Specialty findOrThrow(Long id) {
     return specialtyRepository
         .findById(id)
-        .orElseThrow(() -> new NotFoundException("Không tìm thấy chuyên khoa với id=" + id));
+        .orElseThrow(
+            () ->
+                new NotFoundException(
+                    SpecialtyErrorCode.SPECIALTY_NOT_FOUND,
+                    "Không tìm thấy chuyên khoa với id=" + id));
+  }
+
+  private static ConflictException codeExists(String code) {
+    return new ConflictException(
+        SpecialtyErrorCode.SPECIALTY_CODE_EXISTS, "Mã chuyên khoa đã tồn tại: " + code);
+  }
+
+  /** Builds the WHERE clause from whichever filters were supplied (none = match everything). */
+  private static Specification<Specialty> matching(String keyword, Boolean active) {
+    return (root, query, cb) -> {
+      List<Predicate> predicates = new ArrayList<>();
+      if (keyword != null && !keyword.isBlank()) {
+        String pattern = "%" + escapeLike(keyword.trim().toLowerCase(Locale.ROOT)) + "%";
+        predicates.add(
+            cb.or(
+                cb.like(cb.lower(root.get("name")), pattern, '\\'),
+                cb.like(cb.lower(root.get("code")), pattern, '\\')));
+      }
+      if (active != null) {
+        predicates.add(cb.equal(root.get("active"), active));
+      }
+      return cb.and(predicates.toArray(Predicate[]::new));
+    };
+  }
+
+  /** Make user input literal in a LIKE pattern: {@code %} and {@code _} are wildcards otherwise. */
+  private static String escapeLike(String raw) {
+    return raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
   }
 }
