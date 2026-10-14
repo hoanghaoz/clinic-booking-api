@@ -1,5 +1,6 @@
 package com.se100.clinic.patient;
 
+import com.se100.clinic.patient.enums.Gender;
 import com.se100.clinic.patient.enums.PatientClass;
 import com.se100.clinic.shared.BaseAuditEntity;
 import jakarta.persistence.Column;
@@ -50,8 +51,9 @@ class Patient extends BaseAuditEntity {
   @Column(name = "date_of_birth", nullable = false)
   private LocalDate dateOfBirth;
 
+  @Enumerated(EnumType.STRING)
   @Column(name = "gender", nullable = false, length = 20)
-  private String gender;
+  private Gender gender;
 
   @Column(name = "phone", nullable = false, length = 25)
   private String phone;

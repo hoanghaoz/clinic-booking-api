@@ -106,6 +106,10 @@ class PatientMappingTest {
     assertThat(column(table, "address").getSqlType(metadata)).isEqualTo("text");
     assertThat(column(table, "full_name").getLength()).isEqualTo(150L);
     assertThat(column(table, "gender").getLength()).isEqualTo(20L);
+    var gender = (BasicValue) patient.getProperty("gender").getValue();
+    assertThat(gender.getEnumeratedType()).isEqualTo(EnumType.STRING);
+    assertThat(gender.getType().getReturnedClass().getName())
+        .isEqualTo("com.se100.clinic.patient.enums.Gender");
     assertThat(column(table, "phone").getLength()).isEqualTo(25L);
     assertThat(column(table, "contact_email").getLength()).isEqualTo(254L);
     assertThat(column(table, "identity_type").getLength()).isEqualTo(20L);
