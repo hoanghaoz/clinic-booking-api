@@ -18,14 +18,14 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
-@Table(name = "doctor_majors")
+@Table(name = "doctor_specialities")
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-class DoctorMajor {
+class DoctorSpeciality {
 
-  @EmbeddedId private DoctorMajorId id = new DoctorMajorId();
+  @EmbeddedId private DoctorSpecialityId id = new DoctorSpecialityId();
 
   @MapsId("doctorId")
   @ManyToOne(fetch = FetchType.LAZY, optional = false)

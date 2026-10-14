@@ -17,7 +17,7 @@ import lombok.Setter;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @EqualsAndHashCode
-class DoctorMajorId implements Serializable {
+class DoctorSpecialityId implements Serializable {
 
   @Serial private static final long serialVersionUID = 1L;
 

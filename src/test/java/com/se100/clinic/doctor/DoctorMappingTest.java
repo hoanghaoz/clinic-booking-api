@@ -36,7 +36,7 @@ class DoctorMappingTest {
     assertThat(entityNames)
         .containsExactlyInAnyOrder(
             "com.se100.clinic.doctor.Doctor",
-            "com.se100.clinic.doctor.DoctorMajor",
+            "com.se100.clinic.doctor.DoctorSpeciality",
             "com.se100.clinic.doctor.Specialty");
 
     var registry =
@@ -60,7 +60,7 @@ class DoctorMappingTest {
       try (var sessionFactory = metadata.buildSessionFactory()) {
         assertThat(sessionFactory.getMetamodel().getEntities()).hasSize(3);
         assertDoctorMapping(metadata);
-        assertDoctorMajorMapping(metadata);
+        assertDoctorSpecialityMapping(metadata);
         assertExistingSpecialtyMapping(metadata);
       }
     } finally {
@@ -93,11 +93,11 @@ class DoctorMappingTest {
     assertThat(table.getForeignKeyCollection()).isEmpty();
   }
 
-  private static void assertDoctorMajorMapping(MetadataImplementor metadata) {
-    var link = metadata.getEntityBinding("com.se100.clinic.doctor.DoctorMajor");
+  private static void assertDoctorSpecialityMapping(MetadataImplementor metadata) {
+    var link = metadata.getEntityBinding("com.se100.clinic.doctor.DoctorSpeciality");
     Table table = link.getTable();
 
-    assertThat(table.getName()).isEqualTo("doctor_majors");
+    assertThat(table.getName()).isEqualTo("doctor_specialities");
     assertThat(table.getColumns())
         .extracting(Column::getName)
         .containsExactlyInAnyOrder("doctor_id", "specialty_id", "created_at");
@@ -108,6 +108,7 @@ class DoctorMappingTest {
     assertThat(column(table, "created_at").getSqlType(metadata))
         .matches("timestamp\\(\\d+\\) with time zone");
     var id = (Component) link.getIdentifier();
+    assertThat(id.getComponentClassName()).isEqualTo("com.se100.clinic.doctor.DoctorSpecialityId");
     assertThat(id.getProperties())
         .extracting(property -> property.getName())
         .containsExactlyInAnyOrder("doctorId", "specialtyId");
