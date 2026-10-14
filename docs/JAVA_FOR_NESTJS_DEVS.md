@@ -44,9 +44,10 @@ codebase Spring Boot của dự án — KHÔNG phải giáo trình Java đầy �
 3. **Entity "managed" tự động lưu khi sửa field (dirty checking).** Xem bảng ở trên, dòng
    "Cập nhật entity đã load" — đây là khác biệt dễ gây bug nhất khi mới chuyển từ
    TypeORM/Prisma/EF Core sang Hibernate nếu không để ý.
-4. **`record` thay Lombok.** Dự án CHỦ Ý không dùng Lombok (xem
-   `docs/setup/DECISIONS.md` mục 7) để người mới thấy rõ Java sinh constructor/getter/
-   `equals`/`hashCode` cho DTO bất biến (`record`) mà không cần "magic" từ thư viện ngoài.
+4. **`record` cho DTO, Lombok cho boilerplate.** DTO bất biến tiếp tục dùng `record`;
+   có thể dùng Lombok cho constructor/getter và logging ở class thường. Gradle đã
+   cấu hình annotation processing cho code chính và test (xem
+   `docs/setup/DECISIONS.md` mục 7).
 
 ## 3. 10 lệnh `./gradlew` dùng nhiều nhất
 

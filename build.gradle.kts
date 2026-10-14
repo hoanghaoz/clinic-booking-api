@@ -22,6 +22,11 @@ repositories {
 }
 
 dependencies {
+	compileOnly("org.projectlombok:lombok")
+	annotationProcessor("org.projectlombok:lombok")
+	testCompileOnly("org.projectlombok:lombok")
+	testAnnotationProcessor("org.projectlombok:lombok")
+
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
@@ -74,6 +79,8 @@ val integrationTestImplementation: Configuration by configurations.getting {
 	extendsFrom(configurations.testImplementation.get())
 }
 configurations["integrationTestRuntimeOnly"].extendsFrom(configurations.testRuntimeOnly.get())
+configurations["integrationTestCompileOnly"].extendsFrom(configurations.testCompileOnly.get())
+configurations["integrationTestAnnotationProcessor"].extendsFrom(configurations.testAnnotationProcessor.get())
 // integrationTestImplementation extendsFrom testImplementation (dòng trên) nên đã tự có
 // webmvc-test + testcontainers* — không cần khai báo lại dependency riêng ở đây.
 
