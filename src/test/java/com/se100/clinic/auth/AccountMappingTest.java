@@ -97,14 +97,15 @@ class AccountMappingTest {
     assertThat(tokens.getColumns())
         .extracting(Column::getName)
         .containsExactlyInAnyOrder(
-            "id", "user_id", "token_hash", "expires_at", "revoked_at", "created_at");
+            "id", "user_id", "token_hash", "expires_at", "revoked_at", "created_at", "updated_at");
     assertThat(tokens.getColumns().stream().filter(Column::isNullable))
         .extracting(Column::getName)
         .containsExactly("revoked_at");
     assertThat(column(tokens, "token_hash").getLength()).isEqualTo(128L);
-    assertThat(column(tokens, "expires_at").getSqlType(metadata)).isEqualTo("timestamptz");
-    assertThat(column(tokens, "revoked_at").getSqlType(metadata)).isEqualTo("timestamptz");
-    assertThat(column(tokens, "created_at").getSqlType(metadata)).isEqualTo("timestamptz");
+    for (String name : List.of("expires_at", "revoked_at", "created_at", "updated_at")) {
+      assertThat(column(tokens, name).getSqlType(metadata))
+          .matches("timestamptz|timestamp(?:\\(\\d+\\))? with time zone");
+    }
     assertThat(tokens.getColumns().stream().filter(Column::isUnique))
         .extracting(Column::getName)
         .containsExactly("token_hash");

@@ -3,7 +3,6 @@ package com.se100.clinic.auth;
 import com.se100.clinic.shared.BaseAuditEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -17,14 +16,11 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@EntityListeners(AuditingEntityListener.class)
 @Table(
     name = "refresh_tokens",
     indexes = {
@@ -43,10 +39,9 @@ class RefreshToken extends BaseAuditEntity {
   @Column(name = "token_hash", nullable = false, unique = true, length = 128)
   private String tokenHash;
 
-  @Column(name = "expires_at", nullable = false, columnDefinition = "timestamptz")
+  @Column(name = "expires_at", nullable = false)
   private Instant expiresAt;
 
-  @Column(name = "revoked_at", columnDefinition = "timestamptz")
+  @Column(name = "revoked_at")
   private Instant revokedAt;
-
 }
