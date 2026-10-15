@@ -93,6 +93,8 @@ nhánh) — xem mô tả nghiệp vụ đầy đủ ở [`docs/de-tai.md`](docs/
 | `./gradlew installGitHooks` | Cài lại Git hooks bằng tay nếu cần |
 | `docker compose up -d` | Bật Postgres + Mailpit |
 | `docker compose down` | Tắt Postgres + Mailpit (giữ lại data, xem `-v` để xoá luôn data) |
+| `scripts/db/generate-ddl.sh` | Sinh DDL nháp từ entity ra `build/schema/generated-ddl.sql` (cần Docker, không đụng DB dev) — xem [quy ước migration](docs/conventions/database-migrations.md) |
+| `scripts/db/verify-migrations.sh` | Chạy toàn bộ migration trên DB trống + kiểm tra entity khớp schema — chạy trước khi mở PR có đổi entity/migration |
 
 ## Kiến trúc & quy tắc module
 
@@ -177,7 +179,10 @@ class ModularityTests {
    `XxxErrorCode` (mã lỗi nghiệp vụ của module), `package-info.java`.
 3. Viết Flyway migration: `src/main/resources/db/migration/V<yyyyMMdd_HHmm>__<module>_<mô
    tả>.sql` (dùng timestamp, không dùng số tăng dần — tránh đụng version khi nhiều người
-   tạo migration song song, xem ví dụ `V20260927_1500__doctor_create_specialty.sql`).
+   tạo migration song song, xem ví dụ `V20260927_1500__doctor_create_specialty.sql`). Không cần
+   viết SQL tay từ đầu: `scripts/db/generate-ddl.sh` sinh DDL từ entity, `scripts/db/verify-migrations.sh`
+   kiểm tra migration khớp entity — quy trình đầy đủ ở
+   [`docs/conventions/database-migrations.md`](docs/conventions/database-migrations.md).
 4. Viết test theo mẫu ở `doctor`: unit test Service (Mockito) + test hợp đồng HTTP của
    Controller (MockMvc) ở `src/test/java`, và integration test (Testcontainers, kế thừa
    `AbstractIntegrationTest`) ở `src/integrationTest/java`. Danh sách test cần có: xem
