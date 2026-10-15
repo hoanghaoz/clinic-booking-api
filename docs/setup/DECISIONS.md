@@ -75,12 +75,13 @@ phương án nào. Cập nhật liên tục trong lúc dựng khung repo.
 - **Phương án đã loại:** để Checkstyle fail build ngay từ đầu (đúng thực hành production
   chuẩn, nhưng brief đã đổi ưu tiên sang "learnability over strictness").
 
-### 7. Không dùng Lombok, không dùng H2
+### 7. Lombok cho boilerplate, không dùng H2
 
-- **Quyết định:** giữ nguyên theo brief — code Java thuần (record cho DTO, không dùng
-  Lombok để người mới thấy rõ constructor/getter Spring sinh ra thế nào); dùng
-  Testcontainers Postgres thay vì H2 cho cả unit lẫn integration test liên quan DB.
-- **Lý do:** brief yêu cầu tường minh "No Lombok... No H2".
+- **Quyết định:** cho phép Lombok để giảm boilerplate; cấu hình `compileOnly` và
+  annotation processor cho code chính, unit test và integration test. Phiên bản do
+  Spring Boot quản lý. DTO bất biến vẫn dùng `record`.
+- **Cập nhật:** yêu cầu ngày 2026-10-14 cho phép Lombok, thay quyết định ban đầu
+  "No Lombok". Tiếp tục dùng Testcontainers Postgres thay H2 cho test liên quan DB.
 
 ### 8. Lefthook — cài qua npm, không qua Go/Homebrew/tải binary tay
 

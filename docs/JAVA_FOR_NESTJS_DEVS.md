@@ -15,7 +15,7 @@ codebase Spring Boot của dự án — KHÔNG phải giáo trình Java đầy �
 | Định nghĩa bảng | `@Entity()` (TypeORM) hoặc `model X {}` trong `schema.prisma` | class entity + Fluent API/`[Key]` attribute | `@Entity` + `@Table` — package-private trong dự án này |
 | DTO + validate input | class + decorator `class-validator` (`@IsNotEmpty()`...) | class/record + `DataAnnotations` (`[Required]`...) | `record` (Java 16+) + Bean Validation (`jakarta.validation.constraints.*`, vd `@NotBlank`) |
 | Dependency Injection | constructor injection mặc định (`constructor(private svc: FooService)`) | constructor injection qua DI container built-in | constructor injection — Spring tự tìm bean theo type, KHÔNG cần Lombok/annotation gì thêm trên field |
-| Migration DB | TypeORM migration hoặc `prisma migrate` | EF Core Migrations (`dotnet ef migrations add`) | Flyway — file SQL thuần trong `src/main/resources/db/migration/`, đặt tên `V<timestamp>__<module>_<mô tả>.sql` |
+| Migration DB | TypeORM migration hoặc `prisma migrate` | EF Core Migrations (`dotnet ef migrations add`) | Flyway — file SQL thuần trong `src/main/resources/db/migration/`, đặt tên `V<timestamp>__<module>_<mô tả>.sql` — xem [quy ước migration](conventions/database-migrations.md) |
 | Middleware xử lý lỗi toàn cục | `ExceptionFilter` (`@Catch()`) | `IExceptionHandler`/middleware `UseExceptionHandler` | `@RestControllerAdvice` + `@ExceptionHandler` — xem `com.se100.clinic.shared.GlobalExceptionHandler`, trả `ProblemDetail` (RFC 9457) |
 | Bọc response thành công (interceptor `{data: ...}`) | `Interceptor` (`map(data => ({ data }))`) | `ActionFilter`/`ResultFilter` hoặc kiểu `ApiResponse<T>` tự định nghĩa | Không có interceptor: Controller gọi tường minh `ApiResult.of(...)` (`record` trong `shared`) — xem `SpecialtyController`, quy ước ở `docs/conventions/api-conventions.md` |
 | Phân trang (`skip`/`take`, `paginate`) | `repo.findAndCount({ skip, take })` | `Skip()/Take()` + `CountAsync()` | `Pageable` + `Page<T>` của Spring Data (đánh số từ 0 nội bộ); dự án gói lại bằng `PageParams` (page từ 1) — xem `SpecialtyService#list` |
@@ -44,9 +44,10 @@ codebase Spring Boot của dự án — KHÔNG phải giáo trình Java đầy �
 3. **Entity "managed" tự động lưu khi sửa field (dirty checking).** Xem bảng ở trên, dòng
    "Cập nhật entity đã load" — đây là khác biệt dễ gây bug nhất khi mới chuyển từ
    TypeORM/Prisma/EF Core sang Hibernate nếu không để ý.
-4. **`record` thay Lombok.** Dự án CHỦ Ý không dùng Lombok (xem
-   `docs/setup/DECISIONS.md` mục 7) để người mới thấy rõ Java sinh constructor/getter/
-   `equals`/`hashCode` cho DTO bất biến (`record`) mà không cần "magic" từ thư viện ngoài.
+4. **`record` cho DTO, Lombok cho boilerplate.** DTO bất biến tiếp tục dùng `record`;
+   có thể dùng Lombok cho constructor/getter và logging ở class thường. Gradle đã
+   cấu hình annotation processing cho code chính và test (xem
+   `docs/setup/DECISIONS.md` mục 7).
 
 ## 3. 10 lệnh `./gradlew` dùng nhiều nhất
 

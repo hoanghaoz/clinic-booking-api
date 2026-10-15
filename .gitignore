@@ -45,3 +45,7 @@ package-lock.json
 
 ### JaCoCo / build report đã có trong build/ ở trên, không cần thêm gì
 
+CLAUDE.md
+AGENTS.md
+.agents/
+.claude/
