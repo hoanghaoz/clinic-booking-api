@@ -62,15 +62,19 @@ public class MedicalPackageService {
   /** Validate search request. */
   private static void validateSearchRequest(MedicalPackageSearchRequestDto request) {
     List<FieldViolation> violations = new ArrayList<>();
-    if (request.minAge() != null && request.maxAge() != null && request.minAge() > request.maxAge()) {
+    if (request.minAge() != null
+        && request.maxAge() != null
+        && request.minAge() > request.maxAge()) {
       violations.add(new FieldViolation("minAge", "minAge phải nhỏ hơn hoặc bằng maxAge"));
     }
-    if (request.minPrice() != null && request.maxPrice() != null && request.minPrice().compareTo(request.maxPrice()) > 0) {
+    if (request.minPrice() != null
+        && request.maxPrice() != null
+        && request.minPrice().compareTo(request.maxPrice()) > 0) {
       violations.add(new FieldViolation("minPrice", "minPrice phải nhỏ hơn hoặc bằng maxPrice"));
     }
     if (!violations.isEmpty()) {
       throw new BusinessException(
-        CommonErrorCode.VALIDATION_ERROR, "Tham số tìm kiếm không hợp lệ", violations);
+          CommonErrorCode.VALIDATION_ERROR, "Tham số tìm kiếm không hợp lệ", violations);
     }
   }
 
@@ -82,44 +86,45 @@ public class MedicalPackageService {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.isNull(root.get("effectiveTo")));
-      if (request != null && request.keyword() != null && !request.keyword().isBlank()) {
+      if (request.keyword() != null && !request.keyword().isBlank()) {
         String pattern = "%" + escapeLike(request.keyword().trim().toLowerCase(Locale.ROOT)) + "%";
         predicates.add(
             cb.or(
                 cb.like(cb.lower(root.get("name")), pattern, '\\'),
                 cb.like(cb.lower(root.get("code")), pattern, '\\')));
       }
-      if (request != null && request.status() != null) {
+      if (request.status() != null) {
         predicates.add(cb.equal(root.get("status"), request.status()));
       }
-      if (request != null && request.minPrice() != null) {
+      if (request.minPrice() != null) {
         predicates.add(cb.greaterThanOrEqualTo(root.get("unitPrice"), request.minPrice()));
       }
-      if (request != null && request.maxPrice() != null) {
+      if (request.maxPrice() != null) {
         predicates.add(cb.lessThanOrEqualTo(root.get("unitPrice"), request.maxPrice()));
       }
 
-      if(request != null && request.gender() != null) {
-        predicates.add(request.gender() == TargetGender.BOTH ?
-          cb.equal(root.get("target"), TargetGender.BOTH) :
-          root.get("target").in(request.gender(), TargetGender.BOTH));
+      if (request.gender() != null) {
+        predicates.add(
+            request.gender() == TargetGender.BOTH
+                ? cb.equal(root.get("target"), TargetGender.BOTH)
+                : root.get("target").in(request.gender(), TargetGender.BOTH));
       }
-      if(request != null && request.packageClass() != null) {
+      if (request.packageClass() != null) {
         predicates.add(cb.equal(root.get("packageClass"), request.packageClass()));
       }
 
-      if(request != null && request.minAge() != null) {
-        predicates.add(cb.or(
-          cb.isNull(root.get("maxAge")),
-          cb.greaterThanOrEqualTo(root.get("maxAge"), request.minAge())
-        ));
+      if (request.minAge() != null) {
+        predicates.add(
+            cb.or(
+                cb.isNull(root.get("maxAge")),
+                cb.greaterThanOrEqualTo(root.get("maxAge"), request.minAge())));
       }
 
-      if(request != null && request.maxAge() != null) {
-        predicates.add(cb.or(
-          cb.isNull(root.get("minAge")),
-          cb.lessThanOrEqualTo(root.get("minAge"), request.maxAge())
-        ));
+      if (request.maxAge() != null) {
+        predicates.add(
+            cb.or(
+                cb.isNull(root.get("minAge")),
+                cb.lessThanOrEqualTo(root.get("minAge"), request.maxAge())));
       }
       return cb.and(predicates.toArray(Predicate[]::new));
     };
@@ -191,6 +196,9 @@ public class MedicalPackageService {
   @Transactional(readOnly = true)
   public Page<MedicalPackageResponseDto> list(
       MedicalPackageSearchRequestDto request, Pageable pageable) {
+    if(request != null){
+      validateSearchRequest(request);
+    }
     return packageVersionRepository
         .findAll(matching(request), pageable)
         .map(version -> MedicalPackageResponseDto.from(version.getMedicalPackage(), version));

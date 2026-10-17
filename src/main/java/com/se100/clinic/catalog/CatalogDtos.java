@@ -90,8 +90,7 @@ public final class CatalogDtos {
       Integer maxAge,
       // TODO(specialties): add `List<Long> specialtyIds` (optional, match any)
       BigDecimal minPrice,
-      BigDecimal maxPrice
-  ) {}
+      BigDecimal maxPrice) {}
 
   public record MedicalPackageResponseDto(
       UUID publicId,
