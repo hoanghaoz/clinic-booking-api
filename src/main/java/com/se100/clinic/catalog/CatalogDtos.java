@@ -49,6 +49,7 @@ public final class CatalogDtos {
         "packageClass",
         "consultationMinutes",
         "effectiveFrom"
+        // TODO(specialties): add "specialtyIds"
       })
   public record MedicalPackageCreateDto(
       String code,
@@ -62,8 +63,9 @@ public final class CatalogDtos {
       BigDecimal price,
       PackageClass packageClass,
       Integer consultationMinutes,
-      Instant effectiveFrom)
-      implements PackageVersionFields {}
+      Instant effectiveFrom
+      // TODO(specialties): add `List<Long> specialtyIds` (required, at least one)
+      ) implements PackageVersionFields {}
 
   public record MedicalPackageUpdateDto(
       String name,
@@ -92,7 +94,9 @@ public final class CatalogDtos {
       BigDecimal price,
       PackageClass packageClass,
       Integer consultationMinutes,
-      Instant effectiveFrom) {
+      Instant effectiveFrom
+      // TODO(specialties): add `List<Long> specialtyIds`
+      ) {
     static MedicalPackageResponseDto from(
         MedicalPackage medicalPackage, PackageVersion packageVersion) {
       return new MedicalPackageResponseDto(

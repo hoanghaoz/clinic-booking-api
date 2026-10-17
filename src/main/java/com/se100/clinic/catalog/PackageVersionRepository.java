@@ -1,9 +1,11 @@
 package com.se100.clinic.catalog;
 
-import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-interface PackageVersionRepository extends JpaRepository<PackageVersion, Long> {
+import java.util.Optional;
+
+interface PackageVersionRepository extends JpaRepository<PackageVersion, Long>, JpaSpecificationExecutor<PackageVersion> {
   Optional<PackageVersion> findFirstByMedicalPackageOrderByEffectiveFromDesc(
       MedicalPackage medicalPackage);
 }

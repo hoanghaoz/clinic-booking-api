@@ -31,11 +31,14 @@ class MedicalPackageServiceTest {
 
   @Mock private MedicalPackageRepository medicalPackageRepository;
   @Mock private PackageVersionRepository packageVersionRepository;
+  // TODO(specialties): @Mock private PackageSpecialityRepository packageSpecialityRepository;
+  // @Mock private SpecialtyService specialtyService;
 
   private MedicalPackageService service;
 
   @BeforeEach
   void setUp() {
+    // TODO(specialties): also pass packageSpecialityRepository and specialtyService
     service = new MedicalPackageService(medicalPackageRepository, packageVersionRepository);
   }
 
@@ -45,18 +48,20 @@ class MedicalPackageServiceTest {
     var dto =
         new MedicalPackageCreateDto(
             "HPV3",
-            "Gói HPV 3 mũi",
-            "mô tả",
+            "HPV 3-dose package",
+            "description",
             null,
             9,
             26,
-            "hướng dẫn",
+            "instruction",
             PackageStatus.OPENING,
             new BigDecimal("8800000"),
             PackageClass.STANDARD,
             30,
             from);
-    when(medicalPackageRepository.findByName("Gói HPV 3 mũi")).thenReturn(Optional.empty());
+    when(medicalPackageRepository.findByName("HPV 3-dose package")).thenReturn(Optional.empty());
+    // TODO(specialties): when(specialtyService.getById(1L)).thenReturn(specialty(1L, true));
+    // when(specialtyService.getById(2L)).thenReturn(specialty(2L, true));
 
     MedicalPackageResponseDto response = service.createMedicalPackage(dto);
 
@@ -65,17 +70,55 @@ class MedicalPackageServiceTest {
     PackageVersion saved = captor.getValue();
     assertThat(saved.getVersion()).isEqualTo("v1.0");
     assertThat(saved.getCode()).isEqualTo("HPV3");
-    assertThat(saved.getName()).isEqualTo("Gói HPV 3 mũi");
+    assertThat(saved.getName()).isEqualTo("HPV 3-dose package");
     assertThat(saved.getTarget()).isEqualTo(TargetGender.BOTH);
     assertThat(saved.getEffectiveFrom()).isEqualTo(from);
     assertThat(response.code()).isEqualTo("HPV3");
     assertThat(response.price()).isEqualByComparingTo("8800000");
+    // TODO(specialties): assertThat(response.specialtyIds()).containsExactly(1L, 2L);
+    // ArgumentCaptor<List<PackageSpeciality>> linkCaptor = ArgumentCaptor.captor();
+    // verify(packageSpecialityRepository).saveAll(linkCaptor.capture());
+    // assertThat(linkCaptor.getValue())
+    // .extracting(link -> link.getId().getSpecialtyId())
+    // .containsExactly(1L, 2L);
   }
+
+  // TODO(specialties): @Test
+  // void create_shouldThrowBusinessException_whenNoSpecialty() {
+  //   var dto = createDto("HPV3", "HPV 3-dose package", List.of());
+  //   when(medicalPackageRepository.findByName("HPV 3-dose package")).thenReturn(Optional.empty());
+  //
+  //   assertThatThrownBy(() -> service.createMedicalPackage(dto))
+  //       .isInstanceOf(BusinessException.class);
+  //   verify(medicalPackageRepository, never()).save(any());
+  // }
+  //
+  // @Test
+  // void create_shouldThrowNotFound_whenSpecialtyMissing() {
+  //   var dto = createDto("HPV3", "HPV 3-dose package", List.of(99L));
+  //   when(medicalPackageRepository.findByName("HPV 3-dose package")).thenReturn(Optional.empty());
+  //   when(specialtyService.getById(99L)).thenThrow(new NotFoundException("Not found"));
+  //
+  //   assertThatThrownBy(() -> service.createMedicalPackage(dto))
+  //       .isInstanceOf(NotFoundException.class);
+  //   verify(medicalPackageRepository, never()).save(any());
+  // }
+  //
+  // @Test
+  // void create_shouldThrowConflict_whenSpecialtyInactive() {
+  //   var dto = createDto("HPV3", "HPV 3-dose package", List.of(5L));
+  //   when(medicalPackageRepository.findByName("HPV 3-dose package")).thenReturn(Optional.empty());
+  //   when(specialtyService.getById(5L)).thenReturn(specialty(5L, false));
+  //
+  //   assertThatThrownBy(() -> service.createMedicalPackage(dto))
+  //       .isInstanceOf(ConflictException.class);
+  //   verify(medicalPackageRepository, never()).save(any());
+  // }
 
   @Test
   void create_shouldThrowConflict_whenNameAlreadyExists() {
-    var dto = createDto("HPV3", "Gói HPV 3 mũi");
-    when(medicalPackageRepository.findByName("Gói HPV 3 mũi"))
+    var dto = createDto("HPV3", "HPV 3-dose package");
+    when(medicalPackageRepository.findByName("HPV 3-dose package"))
         .thenReturn(Optional.of(new MedicalPackage()));
 
     assertThatThrownBy(() -> service.createMedicalPackage(dto))
@@ -85,7 +128,7 @@ class MedicalPackageServiceTest {
   @Test
   void update_shouldKeepOldValues_whenDtoFieldsNull() {
     UUID publicId = UUID.randomUUID();
-    MedicalPackage pkg = packageOf("HPV3", "Gói HPV 3 mũi");
+    MedicalPackage pkg = packageOf("HPV3", "HPV 3-dose package");
     PackageVersion old = versionOf(pkg, "v1.0", new BigDecimal("100"));
     when(medicalPackageRepository.findByPublicId(publicId)).thenReturn(Optional.of(pkg));
     when(packageVersionRepository.findFirstByMedicalPackageOrderByEffectiveFromDesc(pkg))
@@ -101,7 +144,7 @@ class MedicalPackageServiceTest {
     PackageVersion saved = captor.getValue();
     assertThat(saved.getVersion()).isEqualTo("v1.1");
     assertThat(saved.getCode()).isEqualTo("HPV3");
-    assertThat(saved.getName()).isEqualTo("Gói HPV 3 mũi");
+    assertThat(saved.getName()).isEqualTo("HPV 3-dose package");
     assertThat(saved.getUnitPrice()).isEqualByComparingTo("200");
     assertThat(saved.getConsultationMinutes()).isEqualTo(30);
     assertThat(old.getEffectiveTo()).isEqualTo(saved.getEffectiveFrom());
@@ -111,7 +154,7 @@ class MedicalPackageServiceTest {
   @Test
   void update_shouldRenamePackage_whenNameProvided() {
     UUID publicId = UUID.randomUUID();
-    MedicalPackage pkg = packageOf("HPV3", "Tên cũ");
+    MedicalPackage pkg = packageOf("HPV3", "Old name");
     PackageVersion old = versionOf(pkg, "v1.0", new BigDecimal("100"));
     when(medicalPackageRepository.findByPublicId(publicId)).thenReturn(Optional.of(pkg));
     when(packageVersionRepository.findFirstByMedicalPackageOrderByEffectiveFromDesc(pkg))
@@ -119,11 +162,11 @@ class MedicalPackageServiceTest {
 
     var dto =
         new MedicalPackageUpdateDto(
-            "Tên mới", null, null, null, null, null, null, null, null, null, null);
+            "New name", null, null, null, null, null, null, null, null, null, null);
     MedicalPackageResponseDto response = service.updateMedicalPackage(dto, publicId);
 
-    assertThat(pkg.getName()).isEqualTo("Tên mới");
-    assertThat(response.name()).isEqualTo("Tên mới");
+    assertThat(pkg.getName()).isEqualTo("New name");
+    assertThat(response.name()).isEqualTo("New name");
   }
 
   @Test
@@ -170,6 +213,11 @@ class MedicalPackageServiceTest {
         30,
         Instant.parse("2026-01-01T00:00:00Z"));
   }
+
+  // TODO(specialties): private static SpecialtyResponse specialty(Long id, boolean active) {
+  //   Instant now = Instant.parse("2026-01-01T00:00:00Z");
+  //   return new SpecialtyResponse(id, "SP" + id, "Specialty " + id, null, active, now, now);
+  // }
 
   private static MedicalPackage packageOf(String code, String name) {
     MedicalPackage pkg = new MedicalPackage();

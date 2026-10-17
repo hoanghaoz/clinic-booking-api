@@ -1,15 +1,14 @@
 package com.se100.clinic.catalog;
 
+import static com.se100.clinic.catalog.CatalogDtos.*;
+
 import com.se100.clinic.shared.error.ConflictException;
 import com.se100.clinic.shared.error.NotFoundException;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.UUID;
-
-import static com.se100.clinic.catalog.CatalogDtos.*;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +18,11 @@ public class MedicalPackageService {
 
   private final MedicalPackageRepository medicalPackageRepository;
   private final PackageVersionRepository packageVersionRepository;
+
+  // TODO(specialties): imports needed when re-enabled: SpecialtyService (doctor module),
+  // BusinessException (shared.error) and java.util.List.
+  // TODO(specialties): private final PackageSpecialityRepository packageSpecialityRepository;
+  // TODO(specialties): private final SpecialtyService specialtyService;
 
   private static PackageVersion createNewPackageVersion(
       PackageVersionFields dto, PackageVersion base, MedicalPackage medicalPackage) {
@@ -45,6 +49,47 @@ public class MedicalPackageService {
     return value != null ? value : fallback;
   }
 
+  // TODO(specialties): enable together with the specialtyIds field in CatalogDtos.
+  // A package must belong to at least one active specialty. Specialties live in the doctor
+  // module, so they are only checked through SpecialtyService (NOT_FOUND if the id is unknown).
+  // private List<Long> validateSpecialties(List<Long> specialtyIds) {
+  //   if (specialtyIds == null || specialtyIds.isEmpty()) {
+  //     throw new BusinessException(
+  //         CatalogErrorCode.MEDICAL_PACKAGE_SPECIALTY_REQUIRED,
+  //         "A package must belong to at least one specialty");
+  //   }
+  //   List<Long> distinctIds = specialtyIds.stream().distinct().toList();
+  //   for (Long specialtyId : distinctIds) {
+  //     if (!specialtyService.getById(specialtyId).active()) {
+  //       throw new ConflictException(
+  //           CatalogErrorCode.MEDICAL_PACKAGE_SPECIALTY_INACTIVE,
+  //           "Specialty id=" + specialtyId + " is inactive");
+  //     }
+  //   }
+  //   return distinctIds;
+  // }
+  //
+  // private void savePackageSpecialties(MedicalPackage medicalPackage, List<Long> specialtyIds) {
+  //   List<PackageSpeciality> links =
+  //       specialtyIds.stream()
+  //           .map(
+  //               specialtyId -> {
+  //                 PackageSpeciality link = new PackageSpeciality();
+  //                 link.setId(new PackageSpecialityId(medicalPackage.getId(), specialtyId));
+  //                 link.setMedicalPackage(medicalPackage);
+  //                 return link;
+  //               })
+  //           .toList();
+  //   packageSpecialityRepository.saveAll(links);
+  // }
+  //
+  // private List<Long> findSpecialtyIds(MedicalPackage medicalPackage) {
+  //   return packageSpecialityRepository.findAllByMedicalPackage(medicalPackage).stream()
+  //       .map(link -> link.getId().getSpecialtyId())
+  //       .toList();
+  // }
+  //
+
   /** {@code null} -> v1.0; v1.0 -> v1.1; ... v1.10 -> v2.0. */
   static String nextVersion(String lastVersion) {
     if (lastVersion == null) {
@@ -64,6 +109,7 @@ public class MedicalPackageService {
     if (medicalPackageRepository.findByName(dto.name()).isPresent()) {
       throw new ConflictException("Medical package already exists");
     }
+    // TODO(specialties): List<Long> specialtyIds = validateSpecialties(dto.specialtyIds());
     MedicalPackage medicalPackage = new MedicalPackage();
     medicalPackage.setCode(dto.code());
     medicalPackage.setName(dto.name());
@@ -72,6 +118,7 @@ public class MedicalPackageService {
     PackageVersion packageVersion =
         createNewPackageVersion(dto, new PackageVersion(), medicalPackage);
     packageVersionRepository.save(packageVersion);
+    // TODO(specialties): savePackageSpecialties(medicalPackage, specialtyIds);
     return MedicalPackageResponseDto.from(medicalPackage, packageVersion);
   }
 
@@ -81,11 +128,18 @@ public class MedicalPackageService {
     MedicalPackage medicalPackage =
         medicalPackageRepository
             .findByPublicId(packagePublicId)
-            .orElseThrow(() -> new NotFoundException(CatalogErrorCode.MEDICAL_PACKAGE_NOT_FOUND, "Package not found"));
+            .orElseThrow(
+                () ->
+                    new NotFoundException(
+                        CatalogErrorCode.MEDICAL_PACKAGE_NOT_FOUND, "Package not found"));
     PackageVersion currentVersion =
         packageVersionRepository
             .findFirstByMedicalPackageOrderByEffectiveFromDesc(medicalPackage)
-            .orElseThrow(() -> new NotFoundException(CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND, "Package version not found"));
+            .orElseThrow(
+                () ->
+                    new NotFoundException(
+                        CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND,
+                        "Package version not found"));
 
     if (dto.name() != null) {
       medicalPackage.setName(dto.name());
@@ -96,6 +150,7 @@ public class MedicalPackageService {
     currentVersion.setEffectiveTo(newVersion.getEffectiveFrom());
     packageVersionRepository.save(newVersion);
 
+    // TODO(specialties): pass findSpecialtyIds(medicalPackage) to the response
     return MedicalPackageResponseDto.from(medicalPackage, newVersion);
   }
 }
