@@ -1,17 +1,8 @@
 package com.se100.clinic.catalog;
 
-import static com.se100.clinic.catalog.CatalogDtos.*;
-
-import com.se100.clinic.catalog.enums.PackageStatus;
-import com.se100.clinic.shared.error.ConflictException;
-import com.se100.clinic.shared.error.NotFoundException;
+import com.se100.clinic.catalog.enums.TargetGender;
+import com.se100.clinic.shared.error.*;
 import jakarta.persistence.criteria.Predicate;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +10,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.*;
+
+import static com.se100.clinic.catalog.CatalogDtos.*;
 
 @Service
 @RequiredArgsConstructor
@@ -63,23 +59,67 @@ public class MedicalPackageService {
     return value != null ? value : fallback;
   }
 
+  /** Validate search request. */
+  private static void validateSearchRequest(MedicalPackageSearchRequestDto request) {
+    List<FieldViolation> violations = new ArrayList<>();
+    if (request.minAge() != null && request.maxAge() != null && request.minAge() > request.maxAge()) {
+      violations.add(new FieldViolation("minAge", "minAge phải nhỏ hơn hoặc bằng maxAge"));
+    }
+    if (request.minPrice() != null && request.maxPrice() != null && request.minPrice().compareTo(request.maxPrice()) > 0) {
+      violations.add(new FieldViolation("minPrice", "minPrice phải nhỏ hơn hoặc bằng maxPrice"));
+    }
+    if (!violations.isEmpty()) {
+      throw new BusinessException(
+        CommonErrorCode.VALIDATION_ERROR, "Tham số tìm kiếm không hợp lệ", violations);
+    }
+  }
+
   /**
    * Builds the WHERE clause of the list query from whichever filters were supplied. Only the
    * current version of each package is matched, so every package appears exactly once.
    */
-  private static Specification<PackageVersion> matching(String keyword, PackageStatus status) {
+  private static Specification<PackageVersion> matching(MedicalPackageSearchRequestDto request) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.isNull(root.get("effectiveTo")));
-      if (keyword != null && !keyword.isBlank()) {
-        String pattern = "%" + escapeLike(keyword.trim().toLowerCase(Locale.ROOT)) + "%";
+      if (request != null && request.keyword() != null && !request.keyword().isBlank()) {
+        String pattern = "%" + escapeLike(request.keyword().trim().toLowerCase(Locale.ROOT)) + "%";
         predicates.add(
             cb.or(
                 cb.like(cb.lower(root.get("name")), pattern, '\\'),
                 cb.like(cb.lower(root.get("code")), pattern, '\\')));
       }
-      if (status != null) {
-        predicates.add(cb.equal(root.get("status"), status));
+      if (request != null && request.status() != null) {
+        predicates.add(cb.equal(root.get("status"), request.status()));
+      }
+      if (request != null && request.minPrice() != null) {
+        predicates.add(cb.greaterThanOrEqualTo(root.get("unitPrice"), request.minPrice()));
+      }
+      if (request != null && request.maxPrice() != null) {
+        predicates.add(cb.lessThanOrEqualTo(root.get("unitPrice"), request.maxPrice()));
+      }
+
+      if(request != null && request.gender() != null) {
+        predicates.add(request.gender() == TargetGender.BOTH ?
+          cb.equal(root.get("target"), TargetGender.BOTH) :
+          root.get("target").in(request.gender(), TargetGender.BOTH));
+      }
+      if(request != null && request.packageClass() != null) {
+        predicates.add(cb.equal(root.get("packageClass"), request.packageClass()));
+      }
+
+      if(request != null && request.minAge() != null) {
+        predicates.add(cb.or(
+          cb.isNull(root.get("maxAge")),
+          cb.greaterThanOrEqualTo(root.get("maxAge"), request.minAge())
+        ));
+      }
+
+      if(request != null && request.maxAge() != null) {
+        predicates.add(cb.or(
+          cb.isNull(root.get("minAge")),
+          cb.lessThanOrEqualTo(root.get("minAge"), request.maxAge())
+        ));
       }
       return cb.and(predicates.toArray(Predicate[]::new));
     };
@@ -150,9 +190,9 @@ public class MedicalPackageService {
    */
   @Transactional(readOnly = true)
   public Page<MedicalPackageResponseDto> list(
-      String keyword, PackageStatus status, Pageable pageable) {
+      MedicalPackageSearchRequestDto request, Pageable pageable) {
     return packageVersionRepository
-        .findAll(matching(keyword, status), pageable)
+        .findAll(matching(request), pageable)
         .map(version -> MedicalPackageResponseDto.from(version.getMedicalPackage(), version));
   }
 

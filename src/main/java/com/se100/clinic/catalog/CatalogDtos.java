@@ -81,6 +81,18 @@ public final class CatalogDtos {
       Instant effectiveFrom)
       implements PackageVersionFields {}
 
+  public record MedicalPackageSearchRequestDto(
+      String keyword,
+      PackageStatus status,
+      TargetGender gender,
+      PackageClass packageClass,
+      Integer minAge,
+      Integer maxAge,
+      // TODO(specialties): add `List<Long> specialtyIds` (optional, match any)
+      BigDecimal minPrice,
+      BigDecimal maxPrice
+  ) {}
+
   public record MedicalPackageResponseDto(
       UUID publicId,
       String code,
