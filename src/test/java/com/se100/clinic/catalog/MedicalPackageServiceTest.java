@@ -4,14 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageCreateDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageResponseDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalPackageSearchRequestDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageUpdateDto;
 import com.se100.clinic.catalog.enums.PackageClass;
 import com.se100.clinic.catalog.enums.PackageStatus;
 import com.se100.clinic.catalog.enums.TargetGender;
+import com.se100.clinic.shared.error.BusinessException;
 import com.se100.clinic.shared.error.ConflictException;
 import com.se100.clinic.shared.error.NotFoundException;
 import java.math.BigDecimal;
@@ -198,7 +201,11 @@ class MedicalPackageServiceTest {
             ArgumentMatchers.<Specification<PackageVersion>>any(), eq(pageable)))
         .thenReturn(new PageImpl<>(List.of(version), pageable, 1));
 
-    Page<MedicalPackageResponseDto> page = service.list("hpv", PackageStatus.OPENING, pageable);
+    var request =
+        new MedicalPackageSearchRequestDto(
+            "hpv", PackageStatus.OPENING, null, null, null, null, null, null);
+
+    Page<MedicalPackageResponseDto> page = service.list(request, pageable);
 
     assertThat(page.getTotalElements()).isEqualTo(1);
     assertThat(page.getContent())
@@ -209,6 +216,26 @@ class MedicalPackageServiceTest {
               assertThat(dto.name()).isEqualTo("HPV 3-dose package");
               assertThat(dto.price()).isEqualByComparingTo("100");
             });
+  }
+
+  @Test
+  void list_shouldThrowBusinessException_whenMinAgeGreaterThanMaxAge() {
+    var request = new MedicalPackageSearchRequestDto(null, null, null, null, 10, 5, null, null);
+
+    assertThatThrownBy(() -> service.list(request, PageRequest.of(0, 20)))
+        .isInstanceOf(BusinessException.class);
+    verifyNoInteractions(packageVersionRepository);
+  }
+
+  @Test
+  void list_shouldThrowBusinessException_whenMinPriceGreaterThanMaxPrice() {
+    var request =
+        new MedicalPackageSearchRequestDto(
+            null, null, null, null, null, null, new BigDecimal("200"), new BigDecimal("100"));
+
+    assertThatThrownBy(() -> service.list(request, PageRequest.of(0, 20)))
+        .isInstanceOf(BusinessException.class);
+    verifyNoInteractions(packageVersionRepository);
   }
 
   @ParameterizedTest
