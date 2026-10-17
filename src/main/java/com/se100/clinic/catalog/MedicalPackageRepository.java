@@ -10,4 +10,6 @@ interface MedicalPackageRepository
   Optional<MedicalPackage> findByName(String name);
 
   Optional<MedicalPackage> findByPublicId(UUID publicId);
+
+  Optional<MedicalPackage> findByCode(String code);
 }

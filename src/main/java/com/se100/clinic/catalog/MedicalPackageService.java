@@ -1,8 +1,12 @@
 package com.se100.clinic.catalog;
 
+import static com.se100.clinic.catalog.CatalogDtos.*;
+
 import com.se100.clinic.catalog.enums.TargetGender;
 import com.se100.clinic.shared.error.*;
 import jakarta.persistence.criteria.Predicate;
+import java.time.Instant;
+import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,11 +14,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.*;
-
-import static com.se100.clinic.catalog.CatalogDtos.*;
 
 @Service
 @RequiredArgsConstructor
@@ -196,7 +195,7 @@ public class MedicalPackageService {
   @Transactional(readOnly = true)
   public Page<MedicalPackageResponseDto> list(
       MedicalPackageSearchRequestDto request, Pageable pageable) {
-    if(request != null){
+    if (request != null) {
       validateSearchRequest(request);
     }
     return packageVersionRepository
@@ -206,7 +205,7 @@ public class MedicalPackageService {
 
   @Transactional
   public MedicalPackageResponseDto createMedicalPackage(MedicalPackageCreateDto dto) {
-    if (medicalPackageRepository.findByName(dto.name()).isPresent()) {
+    if (medicalPackageRepository.findByCode(dto.code()).isPresent()) {
       throw new ConflictException("Medical package already exists");
     }
     // TODO(specialties): List<Long> specialtyIds = validateSpecialties(dto.specialtyIds());
