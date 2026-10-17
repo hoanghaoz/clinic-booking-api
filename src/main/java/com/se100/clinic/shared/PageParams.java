@@ -1,5 +1,8 @@
 package com.se100.clinic.shared;
 
+import com.se100.clinic.shared.error.BusinessException;
+import com.se100.clinic.shared.error.CommonErrorCode;
+import com.se100.clinic.shared.error.FieldViolation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.ArrayList;
 import java.util.List;

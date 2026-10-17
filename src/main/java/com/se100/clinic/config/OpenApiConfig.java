@@ -1,6 +1,6 @@
 package com.se100.clinic.config;
 
-import com.se100.clinic.shared.ApiDocs;
+import com.se100.clinic.shared.api.ApiDocs;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.info.Info;

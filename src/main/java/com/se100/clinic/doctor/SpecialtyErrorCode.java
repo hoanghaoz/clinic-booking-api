@@ -1,6 +1,6 @@
 package com.se100.clinic.doctor;
 
-import com.se100.clinic.shared.ErrorCode;
+import com.se100.clinic.shared.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 
 /**
