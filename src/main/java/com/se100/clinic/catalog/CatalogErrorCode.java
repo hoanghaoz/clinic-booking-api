@@ -4,7 +4,9 @@ import com.se100.clinic.shared.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 
 enum CatalogErrorCode implements ErrorCode {
-  ;
+  MEDICAL_PACKAGE_NOT_FOUND(HttpStatus.NOT_FOUND),
+  MEDICAL_PACKAGE_EXISTS(HttpStatus.CONFLICT),
+  MEDICAL_PACKAGE_VERSION_NOT_FOUND(HttpStatus.NOT_FOUND),;
 
   private final HttpStatus status;
 

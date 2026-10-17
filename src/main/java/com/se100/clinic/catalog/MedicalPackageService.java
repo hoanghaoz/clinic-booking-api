@@ -1,11 +1,12 @@
 package com.se100.clinic.catalog;
+
 import com.se100.clinic.shared.error.ConflictException;
 import com.se100.clinic.shared.error.NotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import static com.se100.clinic.catalog.CatalogDtos.*;
@@ -13,72 +14,88 @@ import static com.se100.clinic.catalog.CatalogDtos.*;
 @Service
 @RequiredArgsConstructor
 public class MedicalPackageService {
+  private static final String FIRST_VERSION = "v1.0";
+  private static final int MAX_MINOR_VERSION = 10;
+
   private final MedicalPackageRepository medicalPackageRepository;
   private final PackageVersionRepository packageVersionRepository;
 
-  private static @NonNull PackageVersion createNewPackageVersion(MedicalPackageUpdateDto dto, PackageVersion packageVersion, MedicalPackage medicalPackage) {
-    PackageVersion newPackageVersion = new PackageVersion();
-    newPackageVersion.setCode(packageVersion.getCode());
-    newPackageVersion.setName(dto.name() != null ? dto.name() : packageVersion.getName());
-    newPackageVersion.setDescription(dto.description() != null ? dto.description() : packageVersion.getDescription());
-    newPackageVersion.setTarget(dto.gender() != null ? dto.gender() : packageVersion.getTarget());
-    newPackageVersion.setMinAge(dto.minAge() != null ? dto.minAge() : packageVersion.getMinAge());
-    newPackageVersion.setMaxAge(dto.maxAge() != null ? dto.maxAge() : packageVersion.getMaxAge());
-    newPackageVersion.setInstruction(dto.instruction() != null ? dto.instruction() : packageVersion.getInstruction());
-    newPackageVersion.setStatus(dto.status() != null ? dto.status() : packageVersion.getStatus());
-    newPackageVersion.setUnitPrice(dto.price() != null ? dto.price() : packageVersion.getUnitPrice());
-    newPackageVersion.setPackageClass(dto.packageClass() != null ? dto.packageClass() : packageVersion.getPackageClass());
-    newPackageVersion.setMedicalPackage(medicalPackage);
-    newPackageVersion.setConsultationMinutes(dto.consultationMinutes() != null ? dto.consultationMinutes() : packageVersion.getConsultationMinutes());
-    newPackageVersion.setEffectiveFrom(dto.effectiveFrom() != null ? dto.effectiveFrom() : packageVersion.getEffectiveFrom());
-    return newPackageVersion;
+  private static PackageVersion createNewPackageVersion(
+      PackageVersionFields dto, PackageVersion base, MedicalPackage medicalPackage) {
+    PackageVersion version = new PackageVersion();
+    version.setMedicalPackage(medicalPackage);
+    version.setCode(medicalPackage.getCode());
+    version.setVersion(nextVersion(base.getVersion()));
+    version.setName(coalesce(dto.name(), base.getName()));
+    version.setDescription(coalesce(dto.description(), base.getDescription()));
+    version.setTarget(coalesce(dto.gender(), base.getTarget()));
+    version.setMinAge(coalesce(dto.minAge(), base.getMinAge()));
+    version.setMaxAge(coalesce(dto.maxAge(), base.getMaxAge()));
+    version.setInstruction(coalesce(dto.instruction(), base.getInstruction()));
+    version.setStatus(coalesce(dto.status(), base.getStatus()));
+    version.setUnitPrice(coalesce(dto.price(), base.getUnitPrice()));
+    version.setPackageClass(coalesce(dto.packageClass(), base.getPackageClass()));
+    version.setConsultationMinutes(
+        coalesce(dto.consultationMinutes(), base.getConsultationMinutes()));
+    version.setEffectiveFrom(coalesce(dto.effectiveFrom(), Instant.now()));
+    return version;
+  }
+
+  private static <T> T coalesce(T value, T fallback) {
+    return value != null ? value : fallback;
+  }
+
+  /** {@code null} -> v1.0; v1.0 -> v1.1; ... v1.10 -> v2.0. */
+  static String nextVersion(String lastVersion) {
+    if (lastVersion == null) {
+      return FIRST_VERSION;
+    }
+    int dot = lastVersion.lastIndexOf('.');
+    int major = Integer.parseInt(lastVersion.substring(1, dot));
+    int minor = Integer.parseInt(lastVersion.substring(dot + 1)) + 1;
+    if (minor > MAX_MINOR_VERSION) {
+      return "v" + (major + 1) + ".0";
+    }
+    return "v" + major + "." + minor;
   }
 
   @Transactional
   public MedicalPackageResponseDto createMedicalPackage(MedicalPackageCreateDto dto) {
-    if(medicalPackageRepository.findByName(dto.name()).isPresent()){
+    if (medicalPackageRepository.findByName(dto.name()).isPresent()) {
       throw new ConflictException("Medical package already exists");
     }
     MedicalPackage medicalPackage = new MedicalPackage();
-    PackageVersion packageVersion = new PackageVersion();
     medicalPackage.setCode(dto.code());
     medicalPackage.setName(dto.name());
     medicalPackageRepository.save(medicalPackage);
 
-    packageVersion.setCode(dto.code());
-    packageVersion.setDescription(dto.description());
-    packageVersion.setTarget(dto.gender());
-    packageVersion.setMinAge(dto.minAge());
-    packageVersion.setMaxAge(dto.maxAge());
-    packageVersion.setInstruction(dto.instruction());
-    packageVersion.setStatus(dto.status());
-    packageVersion.setUnitPrice(dto.price());
-    packageVersion.setPackageClass(dto.packageClass());
-    packageVersion.setMedicalPackage(medicalPackage);
-    packageVersion.setConsultationMinutes(dto.consultationMinutes());
-    packageVersion.setEffectiveFrom(dto.effectiveFrom());
+    PackageVersion packageVersion =
+        createNewPackageVersion(dto, new PackageVersion(), medicalPackage);
     packageVersionRepository.save(packageVersion);
     return MedicalPackageResponseDto.from(medicalPackage, packageVersion);
   }
 
   @Transactional
-  public MedicalPackageResponseDto updateMedicalPackage(MedicalPackageUpdateDto dto, UUID packagePublicId) {
-    MedicalPackage medicalPackage = medicalPackageRepository.findByPublicId(packagePublicId).orElseThrow(() -> new NotFoundException("Package not found"));
-    PackageVersion packageVersion = packageVersionRepository.findByCode(medicalPackage.getCode()).orElseThrow(() -> new NotFoundException("Package version not found"));
+  public MedicalPackageResponseDto updateMedicalPackage(
+      MedicalPackageUpdateDto dto, UUID packagePublicId) {
+    MedicalPackage medicalPackage =
+        medicalPackageRepository
+            .findByPublicId(packagePublicId)
+            .orElseThrow(() -> new NotFoundException(CatalogErrorCode.MEDICAL_PACKAGE_NOT_FOUND, "Package not found"));
+    PackageVersion currentVersion =
+        packageVersionRepository
+            .findFirstByMedicalPackageOrderByEffectiveFromDesc(medicalPackage)
+            .orElseThrow(() -> new NotFoundException(CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND, "Package version not found"));
 
-    // set new name for the medical package if the name is updated
-    if(dto.name() != null && !dto.name().equals(medicalPackage.getName())) {
+    if (dto.name() != null) {
       medicalPackage.setName(dto.name());
-      medicalPackageRepository.save(medicalPackage);
     }
-    // create a new package version with updated fields, keeping the old values if the new ones are null
-    PackageVersion newPackageVersion = createNewPackageVersion(dto, packageVersion, medicalPackage);
+    PackageVersion newVersion = createNewPackageVersion(dto, currentVersion, medicalPackage);
 
-    // set the effectiveTo of the old package version to now
-    packageVersion.setEffectiveTo(java.time.Instant.now());
-    packageVersionRepository.save(packageVersion);
-    packageVersionRepository.save(newPackageVersion);
+    // old version ends exactly when the new one starts: no gap, no overlap
+    currentVersion.setEffectiveTo(newVersion.getEffectiveFrom());
+    packageVersionRepository.save(newVersion);
 
-    return MedicalPackageResponseDto.from(medicalPackage, newPackageVersion);
+    return MedicalPackageResponseDto.from(medicalPackage, newVersion);
   }
 }
