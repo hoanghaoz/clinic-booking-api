@@ -2,4 +2,9 @@ package com.se100.clinic.catalog;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-interface PackageVersionRepository extends JpaRepository<PackageVersion, Long> {}
+import java.util.Optional;
+import java.util.UUID;
+
+interface PackageVersionRepository extends JpaRepository<PackageVersion, Long> {
+  Optional<PackageVersion> findByCode(String code);
+}

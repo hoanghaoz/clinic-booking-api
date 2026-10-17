@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 public final class CatalogDtos {
 
@@ -27,4 +28,52 @@ public final class CatalogDtos {
       Integer consultationMinutes,
       Instant effectiveFrom
   ){}
+
+  public record MedicalPackageUpdateDto(
+      String name,
+      String description,
+      TargetGender gender,
+      Integer minAge,
+      Integer maxAge,
+      String instruction,
+      PackageStatus status,
+      BigDecimal price,
+      PackageClass packageClass,
+      Integer consultationMinutes,
+      Instant effectiveFrom
+  ) {}
+
+  public record MedicalPackageResponseDto(
+      UUID publicId,
+      String code,
+      String name,
+      String description,
+      TargetGender gender,
+      Integer minAge,
+      Integer maxAge,
+      String instruction,
+      PackageStatus status,
+      BigDecimal price,
+      PackageClass packageClass,
+      Integer consultationMinutes,
+      Instant effectiveFrom
+  ){
+    static MedicalPackageResponseDto from(MedicalPackage medicalPackage, PackageVersion packageVersion) {
+      return new MedicalPackageResponseDto(
+          medicalPackage.getPublicId(),
+          medicalPackage.getCode(),
+          medicalPackage.getName(),
+          packageVersion.getDescription(),
+          packageVersion.getTarget(),
+          packageVersion.getMinAge(),
+          packageVersion.getMaxAge(),
+          packageVersion.getInstruction(),
+          packageVersion.getStatus(),
+          packageVersion.getUnitPrice(),
+          packageVersion.getPackageClass(),
+          packageVersion.getConsultationMinutes(),
+          packageVersion.getEffectiveFrom()
+      );
+    }
+  }
 }
