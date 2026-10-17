@@ -4,7 +4,6 @@ import com.se100.clinic.catalog.enums.PackageClass;
 import com.se100.clinic.catalog.enums.PackageStatus;
 import com.se100.clinic.catalog.enums.TargetGender;
 import io.swagger.v3.oas.annotations.media.Schema;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -13,7 +12,44 @@ public final class CatalogDtos {
 
   private CatalogDtos() {}
 
-  @Schema(requiredProperties = {"code", "name", "description", "gender", "instruction", "status", "price", "packageClass", "consultationMinutes", "effectiveFrom"})
+  /** Fields client send to server , both create and update. */
+  interface PackageVersionFields {
+    String name();
+
+    String description();
+
+    TargetGender gender();
+
+    Integer minAge();
+
+    Integer maxAge();
+
+    String instruction();
+
+    PackageStatus status();
+
+    BigDecimal price();
+
+    PackageClass packageClass();
+
+    Integer consultationMinutes();
+
+    Instant effectiveFrom();
+  }
+
+  @Schema(
+      requiredProperties = {
+        "code",
+        "name",
+        "description",
+        "gender",
+        "instruction",
+        "status",
+        "price",
+        "packageClass",
+        "consultationMinutes",
+        "effectiveFrom"
+      })
   public record MedicalPackageCreateDto(
       String code,
       String name,
@@ -26,8 +62,8 @@ public final class CatalogDtos {
       BigDecimal price,
       PackageClass packageClass,
       Integer consultationMinutes,
-      Instant effectiveFrom
-  ){}
+      Instant effectiveFrom)
+      implements PackageVersionFields {}
 
   public record MedicalPackageUpdateDto(
       String name,
@@ -40,8 +76,8 @@ public final class CatalogDtos {
       BigDecimal price,
       PackageClass packageClass,
       Integer consultationMinutes,
-      Instant effectiveFrom
-  ) {}
+      Instant effectiveFrom)
+      implements PackageVersionFields {}
 
   public record MedicalPackageResponseDto(
       UUID publicId,
@@ -56,9 +92,9 @@ public final class CatalogDtos {
       BigDecimal price,
       PackageClass packageClass,
       Integer consultationMinutes,
-      Instant effectiveFrom
-  ){
-    static MedicalPackageResponseDto from(MedicalPackage medicalPackage, PackageVersion packageVersion) {
+      Instant effectiveFrom) {
+    static MedicalPackageResponseDto from(
+        MedicalPackage medicalPackage, PackageVersion packageVersion) {
       return new MedicalPackageResponseDto(
           medicalPackage.getPublicId(),
           medicalPackage.getCode(),
@@ -72,8 +108,7 @@ public final class CatalogDtos {
           packageVersion.getUnitPrice(),
           packageVersion.getPackageClass(),
           packageVersion.getConsultationMinutes(),
-          packageVersion.getEffectiveFrom()
-      );
+          packageVersion.getEffectiveFrom());
     }
   }
 }

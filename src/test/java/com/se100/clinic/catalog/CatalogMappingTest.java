@@ -202,7 +202,7 @@ class CatalogMappingTest {
         "created_at");
     assertNullable(table, "min_age", "max_age", "description", "instruction", "effective_to");
     assertThat(column(table, "id").isIdentity()).isTrue();
-    assertUniqueColumns(table, "code");
+    assertUniqueColumns(table);
     assertLength(table, "code", 50);
     assertLength(table, "name", 200);
     assertLength(table, "version", 30);
