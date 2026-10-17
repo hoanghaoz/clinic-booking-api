@@ -2,20 +2,34 @@ package com.se100.clinic.catalog;
 
 import static com.se100.clinic.catalog.CatalogDtos.*;
 
+import com.se100.clinic.catalog.enums.PackageStatus;
 import com.se100.clinic.shared.error.ConflictException;
 import com.se100.clinic.shared.error.NotFoundException;
+import jakarta.persistence.criteria.Predicate;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class MedicalPackageService {
+  // Sort fields are PackageVersion properties: the list is built from current versions.
+  public static final Set<String> SORTABLE_FIELDS =
+      Set.of("code", "name", "status", "unitPrice", "createdAt");
+  public static final Sort DEFAULT_SORT = Sort.by("name");
+
   private static final String FIRST_VERSION = "v1.0";
   private static final int MAX_MINOR_VERSION = 10;
-
   private final MedicalPackageRepository medicalPackageRepository;
   private final PackageVersionRepository packageVersionRepository;
 
@@ -47,6 +61,33 @@ public class MedicalPackageService {
 
   private static <T> T coalesce(T value, T fallback) {
     return value != null ? value : fallback;
+  }
+
+  /**
+   * Builds the WHERE clause of the list query from whichever filters were supplied. Only the
+   * current version of each package is matched, so every package appears exactly once.
+   */
+  private static Specification<PackageVersion> matching(String keyword, PackageStatus status) {
+    return (root, query, cb) -> {
+      List<Predicate> predicates = new ArrayList<>();
+      predicates.add(cb.isNull(root.get("effectiveTo")));
+      if (keyword != null && !keyword.isBlank()) {
+        String pattern = "%" + escapeLike(keyword.trim().toLowerCase(Locale.ROOT)) + "%";
+        predicates.add(
+            cb.or(
+                cb.like(cb.lower(root.get("name")), pattern, '\\'),
+                cb.like(cb.lower(root.get("code")), pattern, '\\')));
+      }
+      if (status != null) {
+        predicates.add(cb.equal(root.get("status"), status));
+      }
+      return cb.and(predicates.toArray(Predicate[]::new));
+    };
+  }
+
+  /** Make user input literal in a LIKE pattern: {@code %} and {@code _} are wildcards otherwise. */
+  private static String escapeLike(String raw) {
+    return raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
   }
 
   // TODO(specialties): enable together with the specialtyIds field in CatalogDtos.
@@ -102,6 +143,17 @@ public class MedicalPackageService {
       return "v" + (major + 1) + ".0";
     }
     return "v" + major + "." + minor;
+  }
+
+  /**
+   * @param pageable already validated by {@code PageParams#toPageable}
+   */
+  @Transactional(readOnly = true)
+  public Page<MedicalPackageResponseDto> list(
+      String keyword, PackageStatus status, Pageable pageable) {
+    return packageVersionRepository
+        .findAll(matching(keyword, status), pageable)
+        .map(version -> MedicalPackageResponseDto.from(version.getMedicalPackage(), version));
   }
 
   @Transactional

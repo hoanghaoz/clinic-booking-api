@@ -2,6 +2,7 @@ package com.se100.clinic.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +16,7 @@ import com.se100.clinic.shared.error.ConflictException;
 import com.se100.clinic.shared.error.NotFoundException;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,8 +25,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class MedicalPackageServiceTest {
@@ -179,6 +187,28 @@ class MedicalPackageServiceTest {
 
     assertThatThrownBy(() -> service.updateMedicalPackage(dto, publicId))
         .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void list_shouldMapVersionsToResponses_keepingPageMetadata() {
+    MedicalPackage pkg = packageOf("HPV3", "HPV 3-dose package");
+    PackageVersion version = versionOf(pkg, "v1.0", new BigDecimal("100"));
+    Pageable pageable = PageRequest.of(0, 20);
+    when(packageVersionRepository.findAll(
+            ArgumentMatchers.<Specification<PackageVersion>>any(), eq(pageable)))
+        .thenReturn(new PageImpl<>(List.of(version), pageable, 1));
+
+    Page<MedicalPackageResponseDto> page = service.list("hpv", PackageStatus.OPENING, pageable);
+
+    assertThat(page.getTotalElements()).isEqualTo(1);
+    assertThat(page.getContent())
+        .singleElement()
+        .satisfies(
+            dto -> {
+              assertThat(dto.code()).isEqualTo("HPV3");
+              assertThat(dto.name()).isEqualTo("HPV 3-dose package");
+              assertThat(dto.price()).isEqualByComparingTo("100");
+            });
   }
 
   @ParameterizedTest
