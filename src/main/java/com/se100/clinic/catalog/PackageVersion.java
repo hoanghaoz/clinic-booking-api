@@ -3,19 +3,7 @@ package com.se100.clinic.catalog;
 import com.se100.clinic.catalog.enums.PackageClass;
 import com.se100.clinic.catalog.enums.PackageStatus;
 import com.se100.clinic.catalog.enums.TargetGender;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import lombok.AccessLevel;
@@ -33,6 +21,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         @UniqueConstraint(
             name = "uk_package_versions_package_version",
             columnNames = {"package_id", "version"}))
+// No @Index for package_id: the unique (package_id, version) index already covers it.
+// idx_package_versions_current is a partial index (WHERE effective_to IS NULL); JPA cannot
+// express that, so it only exists in the Flyway migration.
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter

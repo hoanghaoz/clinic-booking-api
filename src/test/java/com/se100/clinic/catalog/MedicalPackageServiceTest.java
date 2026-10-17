@@ -70,7 +70,7 @@ class MedicalPackageServiceTest {
             PackageClass.STANDARD,
             30,
             from);
-    when(medicalPackageRepository.findByName("HPV 3-dose package")).thenReturn(Optional.empty());
+    when(medicalPackageRepository.findByCode("HPV3")).thenReturn(Optional.empty());
     // TODO(specialties): when(specialtyService.getById(1L)).thenReturn(specialty(1L, true));
     // when(specialtyService.getById(2L)).thenReturn(specialty(2L, true));
 
@@ -97,7 +97,7 @@ class MedicalPackageServiceTest {
   // TODO(specialties): @Test
   // void create_shouldThrowBusinessException_whenNoSpecialty() {
   //   var dto = createDto("HPV3", "HPV 3-dose package", List.of());
-  //   when(medicalPackageRepository.findByName("HPV 3-dose package")).thenReturn(Optional.empty());
+  //   when(medicalPackageRepository.findByCode("HPV3")).thenReturn(Optional.empty());
   //
   //   assertThatThrownBy(() -> service.createMedicalPackage(dto))
   //       .isInstanceOf(BusinessException.class);
@@ -107,7 +107,7 @@ class MedicalPackageServiceTest {
   // @Test
   // void create_shouldThrowNotFound_whenSpecialtyMissing() {
   //   var dto = createDto("HPV3", "HPV 3-dose package", List.of(99L));
-  //   when(medicalPackageRepository.findByName("HPV 3-dose package")).thenReturn(Optional.empty());
+  //   when(medicalPackageRepository.findByCode("HPV3")).thenReturn(Optional.empty());
   //   when(specialtyService.getById(99L)).thenThrow(new NotFoundException("Not found"));
   //
   //   assertThatThrownBy(() -> service.createMedicalPackage(dto))
@@ -118,7 +118,7 @@ class MedicalPackageServiceTest {
   // @Test
   // void create_shouldThrowConflict_whenSpecialtyInactive() {
   //   var dto = createDto("HPV3", "HPV 3-dose package", List.of(5L));
-  //   when(medicalPackageRepository.findByName("HPV 3-dose package")).thenReturn(Optional.empty());
+  //   when(medicalPackageRepository.findByCode("HPV3")).thenReturn(Optional.empty());
   //   when(specialtyService.getById(5L)).thenReturn(specialty(5L, false));
   //
   //   assertThatThrownBy(() -> service.createMedicalPackage(dto))
@@ -127,10 +127,9 @@ class MedicalPackageServiceTest {
   // }
 
   @Test
-  void create_shouldThrowConflict_whenNameAlreadyExists() {
+  void create_shouldThrowConflict_whenCodeAlreadyExists() {
     var dto = createDto("HPV3", "HPV 3-dose package");
-    when(medicalPackageRepository.findByName("HPV 3-dose package"))
-        .thenReturn(Optional.of(new MedicalPackage()));
+    when(medicalPackageRepository.findByCode("HPV3")).thenReturn(Optional.of(new MedicalPackage()));
 
     assertThatThrownBy(() -> service.createMedicalPackage(dto))
         .isInstanceOf(ConflictException.class);
