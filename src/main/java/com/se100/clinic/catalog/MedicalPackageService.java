@@ -195,9 +195,7 @@ public class MedicalPackageService {
   @Transactional(readOnly = true)
   public Page<MedicalPackageResponseDto> list(
       MedicalPackageSearchRequestDto request, Pageable pageable) {
-    if (request != null) {
-      validateSearchRequest(request);
-    }
+    validateSearchRequest(request);
     return packageVersionRepository
         .findAll(matching(request), pageable)
         .map(version -> MedicalPackageResponseDto.from(version.getMedicalPackage(), version));
