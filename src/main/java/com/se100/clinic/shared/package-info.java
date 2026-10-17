@@ -2,7 +2,7 @@
  * Shared kernel.
  *
  * <p>Contains the global exception handler ({@link
- * com.se100.clinic.shared.GlobalExceptionHandler}), the audit base entity ({@link
+ * GlobalExceptionHandler}), the audit base entity ({@link
  * com.se100.clinic.shared.BaseAuditEntity}) and common types ({@link
  * com.se100.clinic.shared.Role}).
  *
@@ -11,3 +11,5 @@
  * Controller/Repository/Entity — only cross-cutting infrastructure.
  */
 package com.se100.clinic.shared;
+
+import com.se100.clinic.shared.error.GlobalExceptionHandler;

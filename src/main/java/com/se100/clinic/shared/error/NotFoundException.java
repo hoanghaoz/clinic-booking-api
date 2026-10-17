@@ -1,4 +1,4 @@
-package com.se100.clinic.shared;
+package com.se100.clinic.shared.error;
 
 /**
  * Thrown when a record cannot be found by id/code.

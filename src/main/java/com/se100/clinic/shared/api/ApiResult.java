@@ -1,6 +1,7 @@
-package com.se100.clinic.shared;
+package com.se100.clinic.shared.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.se100.clinic.shared.PageParams;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.springframework.data.domain.Page;

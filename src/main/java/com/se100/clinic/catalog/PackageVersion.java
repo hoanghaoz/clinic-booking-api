@@ -47,7 +47,7 @@ class PackageVersion {
   @JoinColumn(name = "package_id", nullable = false)
   private MedicalPackage medicalPackage;
 
-  @Column(name = "code", nullable = false, unique = true, length = 50)
+  @Column(name = "code", nullable = false, length = 50)
   private String code;
 
   @Column(name = "name", nullable = false, length = 200)

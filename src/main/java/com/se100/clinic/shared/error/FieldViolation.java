@@ -1,4 +1,4 @@
-package com.se100.clinic.shared;
+package com.se100.clinic.shared.error;
 
 /**
  * One entry of the {@code errors} array in a {@code VALIDATION_ERROR} response: which input {@code

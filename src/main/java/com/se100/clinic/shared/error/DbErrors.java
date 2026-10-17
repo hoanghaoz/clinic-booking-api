@@ -1,6 +1,7 @@
-package com.se100.clinic.shared;
+package com.se100.clinic.shared.error;
 
 import java.sql.SQLException;
+
 import org.hibernate.exception.ConstraintViolationException;
 
 /**
