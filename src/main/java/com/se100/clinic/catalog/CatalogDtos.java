@@ -52,6 +52,7 @@ public final class CatalogDtos {
         "price",
         "packageClass",
         "consultationMinutes",
+        "items",
         "effectiveFrom"
         // TODO(specialties): add "specialtyIds"
       })
@@ -67,6 +68,7 @@ public final class CatalogDtos {
       BigDecimal price,
       PackageClass packageClass,
       Integer consultationMinutes,
+      MedicalPackageItemAddListDto medicalItems,
       Instant effectiveFrom
       // TODO(specialties): add `List<Long> specialtyIds` (required, at least one)
       ) implements PackageVersionFields {}
@@ -81,6 +83,7 @@ public final class CatalogDtos {
       PackageStatus status,
       BigDecimal price,
       PackageClass packageClass,
+      MedicalPackageItemAddListDto medicalItems,
       Integer consultationMinutes,
       Instant effectiveFrom)
       implements PackageVersionFields {}
@@ -171,4 +174,15 @@ public final class CatalogDtos {
       MedicalItemType type,
       BigDecimal minPrice,
       BigDecimal maxPrice) {}
+
+  public record MedicalPackageItemAddDto(
+      @NotNull(message = "medicalItemPublicId không được để trống") UUID medicalItemPublicId,
+      @NotNull(message = "quantity không được để trống")
+      @Positive(message = "quantity phải là số nguyên dương") Integer quantity
+  ){}
+
+  public record MedicalPackageItemAddListDto(
+      @NotEmpty(message = "Danh sách hạng mục không được để trống")
+      @Size(max = 100, message = "Mỗi lần chỉ thêm tối đa 100 hạng mục")
+      List<@NotNull(message = "Hạng mục không được null") @Valid MedicalPackageItemAddDto> items) {}
 }
