@@ -1,29 +1,32 @@
 package com.se100.clinic.catalog;
 
-import static com.se100.clinic.catalog.CatalogDtos.*;
-
-import com.se100.clinic.shared.error.BusinessException;
-import com.se100.clinic.shared.error.CommonErrorCode;
-import com.se100.clinic.shared.error.ConflictException;
-import com.se100.clinic.shared.error.DbErrors;
-import com.se100.clinic.shared.error.FieldViolation;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import com.se100.clinic.shared.error.*;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+
+import static com.se100.clinic.catalog.CatalogDtos.*;
 
 @Service
 @RequiredArgsConstructor
 public class MedicalItemService {
+
+  public static final Set<String> SORTABLE_FIELDS =
+    Set.of("name", "type", "price");
+  public static final Sort DEFAULT_SORT = Sort.by("name");
   private final MedicalItemRepository medicalItemRepository;
 
   private static MedicalItem toEntity(MedicalItemCreateDto request) {
     MedicalItem medicalItem = new MedicalItem();
-    medicalItem.setName(normalizedName(request));
+    medicalItem.setName(normalizedName(request.name()));
     medicalItem.setDescription(request.description());
     medicalItem.setPrice(request.price());
     medicalItem.setInstruction(request.instruction());
@@ -32,13 +35,95 @@ public class MedicalItemService {
   }
 
   /** The name as stored and compared: names are unique after trimming surrounding whitespace. */
-  private static String normalizedName(MedicalItemCreateDto request) {
-    return request.name().strip();
+  private static String normalizedName(String request) {
+    return request.strip();
+  }
+
+  /** Make user input literal in a LIKE pattern: {@code %} and {@code _} are wildcards otherwise. */
+  private static String escapeLike(String raw) {
+    return raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+  }
+
+  private static Specification<MedicalItem> matching(MedicalItemSearchRequestDto request) {
+    return ((root, query, cb) -> {
+      List<Predicate> predicates = new ArrayList<>();
+      if (request.keyword() != null && !request.keyword().isBlank()) {
+        String pattern = "%" + escapeLike(request.keyword().trim().toLowerCase(Locale.ROOT)) + "%";
+        predicates.add(
+          cb.or(
+            cb.like(cb.lower(root.get("name")), pattern, '\\'),
+            cb.like(cb.lower(root.get("code")), pattern, '\\')));
+      }
+
+      if (request.minPrice() != null) {
+        predicates.add(cb.greaterThanOrEqualTo(root.get("unitPrice"), request.minPrice()));
+      }
+      if (request.maxPrice() != null) {
+        predicates.add(cb.lessThanOrEqualTo(root.get("unitPrice"), request.maxPrice()));
+      }
+
+      if(request.medicalItemType() != null){
+        predicates.add(cb.equal(root.get("type"), request.medicalItemType()));
+      }
+      return cb.and(predicates.toArray(Predicate[]::new));
+    });
+  }
+
+  private static void validateRequest(MedicalItemSearchRequestDto request){
+    List<FieldViolation> violations = new ArrayList<>();
+    if(request != null && request.keyword() != null && request.keyword().length() > 200){
+      violations.add(new FieldViolation("keyword", "Keyword không được vượt quá 200 ký tự"));
+    }
+    if (request != null && request.minPrice() != null
+      && request.maxPrice() != null
+      && request.minPrice().compareTo(request.maxPrice()) > 0) {
+      violations.add(new FieldViolation("minPrice", "minPrice phải nhỏ hơn hoặc bằng maxPrice"));
+    }
+
+    if(!violations.isEmpty()){
+      throw new BusinessException(CommonErrorCode.VALIDATION_ERROR, "Yêu cầu tìm kiếm không hợp lệ", violations);
+    }
+  }
+
+  /**
+   * Set.add returns false for a name already seen, which pinpoints the repeated element. A Set of
+   * the DTOs themselves would not work: a record's equals compares every field, not just the name.
+   */
+  private static Set<String> collectNamesOrReject(List<MedicalItemCreateDto> items) {
+    Set<String> names = new HashSet<>();
+    List<FieldViolation> violations = new ArrayList<>();
+    for (int i = 0; i < items.size(); i++) {
+      if (!names.add(normalizedName(items.get(i).name()))) {
+        violations.add(
+            new FieldViolation("items[" + i + "].name", "Tên hạng mục bị trùng trong danh sách"));
+      }
+    }
+    if (!violations.isEmpty()) {
+      throw new BusinessException(
+          CommonErrorCode.VALIDATION_ERROR, "Danh sách hạng mục không hợp lệ", violations);
+    }
+    return names;
+  }
+
+  /** Turn a unique violation (a race past the pre-check) into the module code; rethrow others. */
+  private static RuntimeException asNameConflict(
+      DataIntegrityViolationException e, String message) {
+    if (DbErrors.isUniqueViolation(e)) {
+      return new ConflictException(CatalogErrorCode.MEDICAL_ITEM_EXISTS, message);
+    }
+    return e;
+  }
+
+  @Transactional(readOnly = true)
+  public Page<MedicalItemResponseDto> searchMedicalItems(MedicalItemSearchRequestDto request, Pageable pageable) {
+    validateRequest(request);
+    var spec = matching(request);
+    return medicalItemRepository.findAll(spec, pageable).map(MedicalItemResponseDto::from);
   }
 
   @Transactional
   public MedicalItemResponseDto createMedicalItem(MedicalItemCreateDto request) {
-    String name = normalizedName(request);
+    String name = normalizedName(request.name());
     if (medicalItemRepository.existsByName(name)) {
       throw new ConflictException(
           CatalogErrorCode.MEDICAL_ITEM_EXISTS, "Hạng mục '" + name + "' đã tồn tại");
@@ -74,34 +159,5 @@ public class MedicalItemService {
       throw asNameConflict(e, "Có hạng mục trùng tên với dữ liệu hiện có");
     }
     return medicalItems.stream().map(MedicalItemResponseDto::from).toList();
-  }
-
-  /**
-   * Set.add returns false for a name already seen, which pinpoints the repeated element. A Set of
-   * the DTOs themselves would not work: a record's equals compares every field, not just the name.
-   */
-  private static Set<String> collectNamesOrReject(List<MedicalItemCreateDto> items) {
-    Set<String> names = new HashSet<>();
-    List<FieldViolation> violations = new ArrayList<>();
-    for (int i = 0; i < items.size(); i++) {
-      if (!names.add(normalizedName(items.get(i)))) {
-        violations.add(
-            new FieldViolation("items[" + i + "].name", "Tên hạng mục bị trùng trong danh sách"));
-      }
-    }
-    if (!violations.isEmpty()) {
-      throw new BusinessException(
-          CommonErrorCode.VALIDATION_ERROR, "Danh sách hạng mục không hợp lệ", violations);
-    }
-    return names;
-  }
-
-  /** Turn a unique violation (a race past the pre-check) into the module code; rethrow others. */
-  private static RuntimeException asNameConflict(
-      DataIntegrityViolationException e, String message) {
-    if (DbErrors.isUniqueViolation(e)) {
-      return new ConflictException(CatalogErrorCode.MEDICAL_ITEM_EXISTS, message);
-    }
-    return e;
   }
 }
