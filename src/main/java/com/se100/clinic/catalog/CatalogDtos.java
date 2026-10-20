@@ -1,5 +1,6 @@
 package com.se100.clinic.catalog;
 
+import com.se100.clinic.catalog.enums.MedicalItemType;
 import com.se100.clinic.catalog.enums.PackageClass;
 import com.se100.clinic.catalog.enums.PackageStatus;
 import com.se100.clinic.catalog.enums.TargetGender;
@@ -138,8 +139,7 @@ public final class CatalogDtos {
 
   public record MedicalItemCreateDto(
     String name,
-    String type,
-    Integer quantity,
+    MedicalItemType medicalItemType,
     BigDecimal price,
     String description,
     String instruction) {}
@@ -151,19 +151,17 @@ public final class CatalogDtos {
   public record MedicalItemResponseDto(
     UUID publicId,
     String name,
-    String type,
     BigDecimal price,
-    Integer quantity,
+    MedicalItemType medicalItemType,
     String description,
     String instruction
   ) {
-    static MedicalItemResponseDto from(MedicalItem medicalItem, PackageVersionItem packageVersionItem) {
+    static MedicalItemResponseDto from(MedicalItem medicalItem) {
       return new MedicalItemResponseDto(
         medicalItem.getPublicId(),
         medicalItem.getName(),
-        medicalItem.getType().name(),
         medicalItem.getPrice(),
-        packageVersionItem.getQuantity(),
+        medicalItem.getType(),
         medicalItem.getDescription(),
         medicalItem.getInstruction()
       );
