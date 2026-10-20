@@ -1,7 +1,10 @@
 package com.se100.clinic.catalog;
 
+import static com.se100.clinic.catalog.CatalogDtos.*;
+
 import com.se100.clinic.shared.error.*;
 import jakarta.persistence.criteria.Predicate;
+import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -11,16 +14,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
-
-import static com.se100.clinic.catalog.CatalogDtos.*;
-
 @Service
 @RequiredArgsConstructor
 public class MedicalItemService {
 
-  public static final Set<String> SORTABLE_FIELDS =
-    Set.of("name", "type", "price");
+  public static final Set<String> SORTABLE_FIELDS = Set.of("name", "type", "price", "createdAt");
   public static final Sort DEFAULT_SORT = Sort.by("name");
   private final MedicalItemRepository medicalItemRepository;
 
@@ -30,7 +28,7 @@ public class MedicalItemService {
     medicalItem.setDescription(request.description());
     medicalItem.setPrice(request.price());
     medicalItem.setInstruction(request.instruction());
-    medicalItem.setType(request.medicalItemType());
+    medicalItem.setType(request.type());
     return medicalItem;
   }
 
@@ -49,39 +47,31 @@ public class MedicalItemService {
       List<Predicate> predicates = new ArrayList<>();
       if (request.keyword() != null && !request.keyword().isBlank()) {
         String pattern = "%" + escapeLike(request.keyword().trim().toLowerCase(Locale.ROOT)) + "%";
-        predicates.add(
-          cb.or(
-            cb.like(cb.lower(root.get("name")), pattern, '\\'),
-            cb.like(cb.lower(root.get("code")), pattern, '\\')));
+        predicates.add(cb.like(cb.lower(root.get("name")), pattern, '\\'));
       }
 
       if (request.minPrice() != null) {
-        predicates.add(cb.greaterThanOrEqualTo(root.get("unitPrice"), request.minPrice()));
+        predicates.add(cb.greaterThanOrEqualTo(root.get("price"), request.minPrice()));
       }
       if (request.maxPrice() != null) {
-        predicates.add(cb.lessThanOrEqualTo(root.get("unitPrice"), request.maxPrice()));
+        predicates.add(cb.lessThanOrEqualTo(root.get("price"), request.maxPrice()));
       }
 
-      if(request.medicalItemType() != null){
-        predicates.add(cb.equal(root.get("type"), request.medicalItemType()));
+      if (request.type() != null) {
+        predicates.add(cb.equal(root.get("type"), request.type()));
       }
       return cb.and(predicates.toArray(Predicate[]::new));
     });
   }
 
-  private static void validateRequest(MedicalItemSearchRequestDto request){
-    List<FieldViolation> violations = new ArrayList<>();
-    if(request != null && request.keyword() != null && request.keyword().length() > 200){
-      violations.add(new FieldViolation("keyword", "Keyword không được vượt quá 200 ký tự"));
-    }
-    if (request != null && request.minPrice() != null
-      && request.maxPrice() != null
-      && request.minPrice().compareTo(request.maxPrice()) > 0) {
-      violations.add(new FieldViolation("minPrice", "minPrice phải nhỏ hơn hoặc bằng maxPrice"));
-    }
-
-    if(!violations.isEmpty()){
-      throw new BusinessException(CommonErrorCode.VALIDATION_ERROR, "Yêu cầu tìm kiếm không hợp lệ", violations);
+  private static void validateRequest(MedicalItemSearchRequestDto request) {
+    if (request.minPrice() != null
+        && request.maxPrice() != null
+        && request.minPrice().compareTo(request.maxPrice()) > 0) {
+      throw new BusinessException(
+          CommonErrorCode.VALIDATION_ERROR,
+          "Yêu cầu tìm kiếm không hợp lệ",
+          List.of(new FieldViolation("minPrice", "minPrice phải nhỏ hơn hoặc bằng maxPrice")));
     }
   }
 
@@ -115,7 +105,8 @@ public class MedicalItemService {
   }
 
   @Transactional(readOnly = true)
-  public Page<MedicalItemResponseDto> searchMedicalItems(MedicalItemSearchRequestDto request, Pageable pageable) {
+  public Page<MedicalItemResponseDto> searchMedicalItems(
+      MedicalItemSearchRequestDto request, Pageable pageable) {
     validateRequest(request);
     var spec = matching(request);
     return medicalItemRepository.findAll(spec, pageable).map(MedicalItemResponseDto::from);
