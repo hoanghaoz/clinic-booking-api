@@ -3,6 +3,7 @@ package com.se100.clinic.catalog;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateBatchDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemResponseDto;
+import com.se100.clinic.shared.PageParams;
 import com.se100.clinic.shared.api.ApiDocs;
 import com.se100.clinic.shared.api.ApiResult;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,15 +12,15 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.net.URI;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.net.URI;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/medical-items")
@@ -61,5 +62,18 @@ class MedicalItemController {
       @Valid @RequestBody MedicalItemCreateBatchDto request) {
     List<MedicalItemResponseDto> created = medicalItemService.createBatchMedicalItems(request);
     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResult.of(created));
+  }
+
+  @GetMapping("/search")
+  @Operation(summary = "Tìm kiếm hạng mục y tế")
+  @ApiResponse(responseCode = "200", description = "Kết quả tìm kiếm")
+  ApiResult<List<MedicalItemResponseDto>> searchMedicalItems(
+    @ParameterObject @Valid CatalogDtos.MedicalItemSearchRequestDto request,
+    @ParameterObject PageParams pageParams
+    ) {
+    Pageable pageable = pageParams.toPageable(
+      MedicalItemService.SORTABLE_FIELDS, MedicalItemService.DEFAULT_SORT
+    );
+    return ApiResult.of(medicalItemService.searchMedicalItems(request, pageable));
   }
 }
