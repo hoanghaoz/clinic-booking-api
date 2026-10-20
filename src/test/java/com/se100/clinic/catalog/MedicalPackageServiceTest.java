@@ -2,12 +2,15 @@ package com.se100.clinic.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageCreateDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalPackageItemAddDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalPackageItemAddListDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageResponseDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageSearchRequestDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageUpdateDto;
@@ -42,6 +45,8 @@ class MedicalPackageServiceTest {
 
   @Mock private MedicalPackageRepository medicalPackageRepository;
   @Mock private PackageVersionRepository packageVersionRepository;
+  @Mock private MedicalItemRepository medicalItemRepository;
+  @Mock private PackageVersionItemRepository packageVersionItemRepository;
   // TODO(specialties): @Mock private PackageSpecialityRepository packageSpecialityRepository;
   // @Mock private SpecialtyService specialtyService;
 
@@ -50,12 +55,20 @@ class MedicalPackageServiceTest {
   @BeforeEach
   void setUp() {
     // TODO(specialties): also pass packageSpecialityRepository and specialtyService
-    service = new MedicalPackageService(medicalPackageRepository, packageVersionRepository);
+    service =
+        new MedicalPackageService(
+            medicalPackageRepository,
+            packageVersionRepository,
+            medicalItemRepository,
+            packageVersionItemRepository);
   }
 
   @Test
   void create_shouldSaveFirstVersionWithPackageCode() {
     Instant from = Instant.parse("2026-01-01T00:00:00Z");
+    MedicalItem item = new MedicalItem();
+    item.setName("Blood test");
+    UUID itemId = item.getPublicId();
     var dto =
         new MedicalPackageCreateDto(
             "HPV3",
@@ -69,8 +82,10 @@ class MedicalPackageServiceTest {
             new BigDecimal("8800000"),
             PackageClass.STANDARD,
             30,
+            new MedicalPackageItemAddListDto(List.of(new MedicalPackageItemAddDto(itemId, 2, 1))),
             from);
     when(medicalPackageRepository.findByCode("HPV3")).thenReturn(Optional.empty());
+    when(medicalItemRepository.findAllByPublicIdIn(any())).thenReturn(List.of(item));
     // TODO(specialties): when(specialtyService.getById(1L)).thenReturn(specialty(1L, true));
     // when(specialtyService.getById(2L)).thenReturn(specialty(2L, true));
 
@@ -148,7 +163,18 @@ class MedicalPackageServiceTest {
 
     var dto =
         new MedicalPackageUpdateDto(
-            null, null, null, null, null, null, null, new BigDecimal("200"), null, null, null);
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            new BigDecimal("200"),
+            null,
+            null,
+            null,
+            null);
     MedicalPackageResponseDto response = service.updateMedicalPackage(dto, publicId);
 
     ArgumentCaptor<PackageVersion> captor = ArgumentCaptor.forClass(PackageVersion.class);
@@ -174,7 +200,7 @@ class MedicalPackageServiceTest {
 
     var dto =
         new MedicalPackageUpdateDto(
-            "New name", null, null, null, null, null, null, null, null, null, null);
+            "New name", null, null, null, null, null, null, null, null, null, null, null);
     MedicalPackageResponseDto response = service.updateMedicalPackage(dto, publicId);
 
     assertThat(pkg.getName()).isEqualTo("New name");
@@ -187,7 +213,7 @@ class MedicalPackageServiceTest {
     when(medicalPackageRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
     var dto =
         new MedicalPackageUpdateDto(
-            null, null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null, null, null);
 
     assertThatThrownBy(() -> service.updateMedicalPackage(dto, publicId))
         .isInstanceOf(NotFoundException.class)
@@ -271,6 +297,7 @@ class MedicalPackageServiceTest {
         BigDecimal.TEN,
         PackageClass.STANDARD,
         30,
+        null,
         Instant.parse("2026-01-01T00:00:00Z"));
   }
 

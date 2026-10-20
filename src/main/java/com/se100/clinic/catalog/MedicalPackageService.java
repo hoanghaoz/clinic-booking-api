@@ -1,8 +1,14 @@
 package com.se100.clinic.catalog;
 
+import static com.se100.clinic.catalog.CatalogDtos.*;
+
 import com.se100.clinic.catalog.enums.TargetGender;
 import com.se100.clinic.shared.error.*;
 import jakarta.persistence.criteria.Predicate;
+import java.time.Instant;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,11 +16,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.*;
-
-import static com.se100.clinic.catalog.CatalogDtos.*;
 
 @Service
 @RequiredArgsConstructor
@@ -32,7 +33,6 @@ public class MedicalPackageService {
   private final PackageVersionItemRepository packageVersionItemRepository;
 
   // TODO(specialties): imports needed when re-enabled: SpecialtyService (doctor module),
-  // BusinessException (shared.error) and java.util.List.
   // TODO(specialties): private final PackageSpecialityRepository packageSpecialityRepository;
   // TODO(specialties): private final SpecialtyService specialtyService;
 
@@ -211,15 +211,8 @@ public class MedicalPackageService {
           CatalogErrorCode.MEDICAL_PACKAGE_EXISTS, "Mã gói khám '" + dto.code() + "' đã tồn tại");
     }
     // TODO(specialties): List<Long> specialtyIds = validateSpecialties(dto.specialtyIds());
-    List<MedicalItem> medicalItems = medicalItemRepository.findAllByPublicIdIn(dto.medicalItems().items()
-      .stream()
-      .map(MedicalPackageItemAddDto::medicalItemPublicId).toList());
+    Map<UUID, MedicalItem> itemsById = loadMedicalItems(dto.medicalItems());
 
-    if(medicalItems.size() != dto.medicalItems().items().size()) {
-      throw new NotFoundException(
-          CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Một hoặc nhiều hạng mục y tế không tồn tại");
-    }
-    // TODO(specialties): validate that all medical items are valid for the package
     MedicalPackage medicalPackage = new MedicalPackage();
     medicalPackage.setCode(dto.code());
     medicalPackage.setName(dto.name());
@@ -230,7 +223,8 @@ public class MedicalPackageService {
     packageVersionRepository.save(packageVersion);
     // TODO(specialties): savePackageSpecialties(medicalPackage, specialtyIds);
 
-    createListPackageVersionItem(packageVersion, medicalItems, dto.medicalItems());
+    packageVersionItemRepository.saveAll(
+        toVersionItems(packageVersion, dto.medicalItems().items(), itemsById));
     return MedicalPackageResponseDto.from(medicalPackage, packageVersion);
   }
 
@@ -252,6 +246,9 @@ public class MedicalPackageService {
                     new NotFoundException(
                         CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND,
                         "Không tìm thấy phiên bản của gói khám"));
+    // Validate the new items before anything is changed.
+    Map<UUID, MedicalItem> itemsById =
+        dto.medicalItems() == null ? null : loadMedicalItems(dto.medicalItems());
 
     if (dto.name() != null) {
       medicalPackage.setName(dto.name());
@@ -262,62 +259,97 @@ public class MedicalPackageService {
     currentVersion.setEffectiveTo(newVersion.getEffectiveFrom());
     packageVersionRepository.save(newVersion);
 
-    if(dto.medicalItems() == null){
-      List<PackageVersionItem> newPackageVersionItems =
-        packageVersionItemRepository.findAllByPackageVersionIdInOrderByPositionAsc(currentVersion.getId()).
-          stream().
-          distinct().map(oldItem -> {
-            PackageVersionItem newItem = new PackageVersionItem();
-            newItem.setPackageVersion(newVersion);
-            newItem.setItem(oldItem.getItem());
-            newItem.setInstructionSnapshot(oldItem.getInstructionSnapshot());
-            newItem.setItemNameSnapshot(oldItem.getItemNameSnapshot());
-            newItem.setQuantity(oldItem.getQuantity());
-            newItem.setPosition(oldItem.getPosition());
-          return newItem;
-        }).toList();
-      packageVersionItemRepository.saveAll(newPackageVersionItems);
-    }
-    else{
-      List<MedicalItem> medicalItems = medicalItemRepository.findAllByPublicIdIn(dto.medicalItems().items()
-        .stream()
-        .map(MedicalPackageItemAddDto::medicalItemPublicId).toList());
-
-      if(medicalItems.size() != dto.medicalItems().items().size()) {
-        throw new NotFoundException(
-            CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Một hoặc nhiều hạng mục y tế không tồn tại");
-      }
-
-      List<PackageVersionItem> packageVersionItems = createListPackageVersionItem(newVersion, medicalItems, dto.medicalItems());
-      packageVersionItemRepository.saveAll(packageVersionItems);
-    }
+    // No items in the request: the new version keeps the old items. Otherwise they are replaced.
+    List<PackageVersionItem> versionItems =
+        itemsById == null
+            ? copyVersionItems(currentVersion, newVersion)
+            : toVersionItems(newVersion, dto.medicalItems().items(), itemsById);
+    packageVersionItemRepository.saveAll(versionItems);
 
     // TODO(specialties): pass findSpecialtyIds(medicalPackage) to the response
     return MedicalPackageResponseDto.from(medicalPackage, newVersion);
   }
 
-  private List<PackageVersionItem> createListPackageVersionItem(PackageVersion newVersion, List<MedicalItem> medicalItems, MedicalPackageItemAddListDto medicalPackageItemAddListDto) {
-    List<PackageVersionItem> packageVersionItems = medicalItems.stream().map(medicalItem -> {
-      PackageVersionItem item = new PackageVersionItem();
-      item.setPackageVersion(newVersion);
-      item.setItem(medicalItem);
-      item.setInstructionSnapshot(medicalItem.getInstruction());
-      item.setItemNameSnapshot(medicalItem.getName());
-      item.setQuantity(medicalPackageItemAddListDto.items().stream()
-          .filter(i -> i.medicalItemPublicId().equals(medicalItem.getPublicId()))
-          .findFirst()
-          .orElseThrow(() -> new NotFoundException(
-              CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Hạng mục y tế không tồn tại"))
-          .quantity());
-      item.setPosition(medicalPackageItemAddListDto.items().stream()
-          .filter(i -> i.medicalItemPublicId().equals(medicalItem.getPublicId()))
-          .findFirst()
-          .orElseThrow(() -> new NotFoundException(
-              CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Hạng mục y tế không tồn tại"))
-          .position());
-      return item;
-    }).toList();
-    packageVersionItemRepository.saveAll(packageVersionItems);
-    return packageVersionItems;
+  /**
+   * Rejects repeated items or positions (400) and unknown items (404); returns the requested items
+   * by public id. Set.add returning false pinpoints the repeated element.
+   */
+  private Map<UUID, MedicalItem> loadMedicalItems(MedicalPackageItemAddListDto request) {
+    List<MedicalPackageItemAddDto> requested = request.items();
+    Set<UUID> itemIds = new HashSet<>();
+    Set<Integer> positions = new HashSet<>();
+    List<FieldViolation> violations = new ArrayList<>();
+    for (int i = 0; i < requested.size(); i++) {
+      MedicalPackageItemAddDto item = requested.get(i);
+      if (!itemIds.add(item.medicalItemPublicId())) {
+        violations.add(
+            new FieldViolation(
+                "medicalItems.items[" + i + "].medicalItemPublicId",
+                "Hạng mục bị trùng trong danh sách"));
+      }
+      if (!positions.add(item.position())) {
+        violations.add(
+            new FieldViolation(
+                "medicalItems.items[" + i + "].position", "Vị trí bị trùng trong danh sách"));
+      }
+    }
+    if (!violations.isEmpty()) {
+      throw new BusinessException(
+          CommonErrorCode.VALIDATION_ERROR, "Danh sách hạng mục không hợp lệ", violations);
+    }
+
+    Map<UUID, MedicalItem> found =
+        medicalItemRepository.findAllByPublicIdIn(itemIds).stream()
+            .collect(Collectors.toMap(MedicalItem::getPublicId, Function.identity()));
+    String missing =
+        itemIds.stream()
+            .filter(id -> !found.containsKey(id))
+            .map(UUID::toString)
+            .collect(Collectors.joining(", "));
+    if (!missing.isEmpty()) {
+      throw new NotFoundException(
+          CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Không tìm thấy hạng mục y tế: " + missing);
+    }
+    return found;
+  }
+
+  /** Items are snapshotted (name, instruction) so later edits of a MedicalItem do not alter it. */
+  private static List<PackageVersionItem> toVersionItems(
+      PackageVersion version,
+      List<MedicalPackageItemAddDto> requested,
+      Map<UUID, MedicalItem> itemsById) {
+    return requested.stream()
+        .map(
+            request -> {
+              MedicalItem item = itemsById.get(request.medicalItemPublicId());
+              PackageVersionItem versionItem = new PackageVersionItem();
+              versionItem.setPackageVersion(version);
+              versionItem.setItem(item);
+              versionItem.setItemNameSnapshot(item.getName());
+              versionItem.setInstructionSnapshot(item.getInstruction());
+              versionItem.setQuantity(request.quantity());
+              versionItem.setPosition(request.position());
+              return versionItem;
+            })
+        .toList();
+  }
+
+  /** Copies the rows as they are, keeping the old snapshots. */
+  private List<PackageVersionItem> copyVersionItems(PackageVersion from, PackageVersion to) {
+    return packageVersionItemRepository
+        .findAllByPackageVersionIdOrderByPositionAsc(from.getId())
+        .stream()
+        .map(
+            old -> {
+              PackageVersionItem copy = new PackageVersionItem();
+              copy.setPackageVersion(to);
+              copy.setItem(old.getItem());
+              copy.setItemNameSnapshot(old.getItemNameSnapshot());
+              copy.setInstructionSnapshot(old.getInstructionSnapshot());
+              copy.setQuantity(old.getQuantity());
+              copy.setPosition(old.getPosition());
+              return copy;
+            })
+        .toList();
   }
 }

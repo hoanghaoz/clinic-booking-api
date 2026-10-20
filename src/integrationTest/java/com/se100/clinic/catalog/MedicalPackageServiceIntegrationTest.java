@@ -3,10 +3,14 @@ package com.se100.clinic.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.se100.clinic.AbstractIntegrationTest;
+import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageCreateDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalPackageItemAddDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalPackageItemAddListDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageResponseDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageSearchRequestDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageUpdateDto;
+import com.se100.clinic.catalog.enums.MedicalItemType;
 import com.se100.clinic.catalog.enums.PackageClass;
 import com.se100.clinic.catalog.enums.PackageStatus;
 import com.se100.clinic.catalog.enums.TargetGender;
@@ -24,6 +28,17 @@ import org.springframework.data.domain.Sort;
 class MedicalPackageServiceIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private MedicalPackageService medicalPackageService;
+  @Autowired private MedicalItemService medicalItemService;
+
+  /** One persisted item to put in a package, named uniquely so reruns never clash. */
+  private MedicalPackageItemAddListDto oneItem() {
+    var item =
+        medicalItemService.createMedicalItem(
+            new MedicalItemCreateDto(
+                "Item " + UUID.randomUUID(), MedicalItemType.LAB, BigDecimal.TEN, null, null));
+    return new MedicalPackageItemAddListDto(
+        List.of(new MedicalPackageItemAddDto(item.publicId(), 1, 1)));
+  }
 
   // TODO(specialties): also @Autowired SpecialtyService, create two specialties, pass their ids
   // in the create dto, and assert response.specialtyIds() after create and after update (the
@@ -47,6 +62,7 @@ class MedicalPackageServiceIntegrationTest extends AbstractIntegrationTest {
                 new BigDecimal("1000000"),
                 PackageClass.STANDARD,
                 30,
+                oneItem(),
                 Instant.parse("2026-01-01T00:00:00Z")));
 
     MedicalPackageResponseDto updated =
@@ -60,6 +76,7 @@ class MedicalPackageServiceIntegrationTest extends AbstractIntegrationTest {
                 null,
                 null,
                 new BigDecimal("2000000"),
+                null,
                 null,
                 null,
                 null),
@@ -78,7 +95,18 @@ class MedicalPackageServiceIntegrationTest extends AbstractIntegrationTest {
     // v1.0 -> v1.1: the package must still appear once, with the new price
     medicalPackageService.updateMedicalPackage(
         new MedicalPackageUpdateDto(
-            null, null, null, null, null, null, null, new BigDecimal("2000000"), null, null, null),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            new BigDecimal("2000000"),
+            null,
+            null,
+            null,
+            null),
         rolledOver.publicId());
 
     var pageable = PageRequest.of(0, 10, Sort.by("name"));
@@ -229,6 +257,7 @@ class MedicalPackageServiceIntegrationTest extends AbstractIntegrationTest {
             new BigDecimal(price),
             packageClass,
             30,
+            oneItem(),
             Instant.parse("2026-01-01T00:00:00Z")));
   }
 }

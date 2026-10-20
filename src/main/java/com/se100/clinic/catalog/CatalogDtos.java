@@ -52,7 +52,7 @@ public final class CatalogDtos {
         "price",
         "packageClass",
         "consultationMinutes",
-        "items",
+        "medicalItems",
         "effectiveFrom"
         // TODO(specialties): add "specialtyIds"
       })
@@ -68,7 +68,8 @@ public final class CatalogDtos {
       BigDecimal price,
       PackageClass packageClass,
       Integer consultationMinutes,
-      MedicalPackageItemAddListDto medicalItems,
+      @NotNull(message = "Danh sách hạng mục không được để trống") @Valid
+          MedicalPackageItemAddListDto medicalItems,
       Instant effectiveFrom
       // TODO(specialties): add `List<Long> specialtyIds` (required, at least one)
       ) implements PackageVersionFields {}
@@ -83,8 +84,8 @@ public final class CatalogDtos {
       PackageStatus status,
       BigDecimal price,
       PackageClass packageClass,
-      MedicalPackageItemAddListDto medicalItems,
       Integer consultationMinutes,
+      @Valid MedicalPackageItemAddListDto medicalItems,
       Instant effectiveFrom)
       implements PackageVersionFields {}
 
@@ -178,14 +179,32 @@ public final class CatalogDtos {
   public record MedicalPackageItemAddDto(
       @NotNull(message = "medicalItemPublicId không được để trống") UUID medicalItemPublicId,
       @NotNull(message = "quantity không được để trống")
-      @Positive(message = "quantity phải là số nguyên dương") Integer quantity,
-
+          @Positive(message = "quantity phải là số nguyên dương")
+          Integer quantity,
       @NotNull(message = "position không được để trống")
-      @Positive(message = "Vị trí phải là số dương") Integer position
-  ){}
+          @Positive(message = "Vị trí phải là số dương")
+          Integer position) {}
 
   public record MedicalPackageItemAddListDto(
       @NotEmpty(message = "Danh sách hạng mục không được để trống")
-      @Size(max = 100, message = "Mỗi lần chỉ thêm tối đa 100 hạng mục")
-      List<@NotNull(message = "Hạng mục không được null") @Valid MedicalPackageItemAddDto> items) {}
+          @Size(max = 100, message = "Mỗi lần chỉ thêm tối đa 100 hạng mục")
+          List<@NotNull(message = "Hạng mục không được null") @Valid MedicalPackageItemAddDto>
+              items) {}
+
+  /** An item of one package version, as snapshotted when that version was created. */
+  public record MedicalPackageItemResponseDto(
+      UUID medicalItemPublicId,
+      String name,
+      String instruction,
+      Integer quantity,
+      Integer position) {
+    static MedicalPackageItemResponseDto from(PackageVersionItem versionItem) {
+      return new MedicalPackageItemResponseDto(
+          versionItem.getItem().getPublicId(),
+          versionItem.getItemNameSnapshot(),
+          versionItem.getInstructionSnapshot(),
+          versionItem.getQuantity(),
+          versionItem.getPosition());
+    }
+  }
 }
