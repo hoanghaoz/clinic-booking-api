@@ -204,7 +204,8 @@ public class MedicalPackageService {
   @Transactional
   public MedicalPackageResponseDto createMedicalPackage(MedicalPackageCreateDto dto) {
     if (medicalPackageRepository.findByCode(dto.code()).isPresent()) {
-      throw new ConflictException("Medical package already exists");
+      throw new ConflictException(
+          CatalogErrorCode.MEDICAL_PACKAGE_EXISTS, "Mã gói khám '" + dto.code() + "' đã tồn tại");
     }
     // TODO(specialties): List<Long> specialtyIds = validateSpecialties(dto.specialtyIds());
     MedicalPackage medicalPackage = new MedicalPackage();
@@ -228,7 +229,7 @@ public class MedicalPackageService {
             .orElseThrow(
                 () ->
                     new NotFoundException(
-                        CatalogErrorCode.MEDICAL_PACKAGE_NOT_FOUND, "Package not found"));
+                        CatalogErrorCode.MEDICAL_PACKAGE_NOT_FOUND, "Không tìm thấy gói khám"));
     PackageVersion currentVersion =
         packageVersionRepository
             .findFirstByMedicalPackageOrderByEffectiveFromDesc(medicalPackage)
@@ -236,7 +237,7 @@ public class MedicalPackageService {
                 () ->
                     new NotFoundException(
                         CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND,
-                        "Package version not found"));
+                        "Không tìm thấy phiên bản của gói khám"));
 
     if (dto.name() != null) {
       medicalPackage.setName(dto.name());
