@@ -178,7 +178,10 @@ public final class CatalogDtos {
   public record MedicalPackageItemAddDto(
       @NotNull(message = "medicalItemPublicId không được để trống") UUID medicalItemPublicId,
       @NotNull(message = "quantity không được để trống")
-      @Positive(message = "quantity phải là số nguyên dương") Integer quantity
+      @Positive(message = "quantity phải là số nguyên dương") Integer quantity,
+
+      @NotNull(message = "position không được để trống")
+      @Positive(message = "Vị trí phải là số dương") Integer position
   ){}
 
   public record MedicalPackageItemAddListDto(

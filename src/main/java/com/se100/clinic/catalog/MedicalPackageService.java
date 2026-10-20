@@ -230,22 +230,7 @@ public class MedicalPackageService {
     packageVersionRepository.save(packageVersion);
     // TODO(specialties): savePackageSpecialties(medicalPackage, specialtyIds);
 
-    PackageVersionItem packageVersionItem = new PackageVersionItem();
-    List<PackageVersionItem> packageVersionItems = medicalItems.stream().map(medicalItem -> {
-      PackageVersionItem item = new PackageVersionItem();
-      item.setPackageVersion(packageVersion);
-      item.setItem(medicalItem);
-      item.setInstructionSnapshot(medicalItem.getInstruction());
-      item.setItemNameSnapshot(medicalItem.getName());
-      item.setQuantity(dto.medicalItems().items().stream()
-          .filter(i -> i.medicalItemPublicId().equals(medicalItem.getPublicId()))
-          .findFirst()
-          .orElseThrow(() -> new NotFoundException(
-              CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Hạng mục y tế không tồn tại"))
-          .quantity());
-      return item;
-    }).toList();
-    packageVersionItemRepository.saveAll(packageVersionItems);
+    createListPackageVersionItem(packageVersion, medicalItems, dto.medicalItems());
     return MedicalPackageResponseDto.from(medicalPackage, packageVersion);
   }
 
@@ -277,7 +262,62 @@ public class MedicalPackageService {
     currentVersion.setEffectiveTo(newVersion.getEffectiveFrom());
     packageVersionRepository.save(newVersion);
 
+    if(dto.medicalItems() == null){
+      List<PackageVersionItem> newPackageVersionItems =
+        packageVersionItemRepository.findAllByPackageVersionIdInOrderByPositionAsc(currentVersion.getId()).
+          stream().
+          distinct().map(oldItem -> {
+            PackageVersionItem newItem = new PackageVersionItem();
+            newItem.setPackageVersion(newVersion);
+            newItem.setItem(oldItem.getItem());
+            newItem.setInstructionSnapshot(oldItem.getInstructionSnapshot());
+            newItem.setItemNameSnapshot(oldItem.getItemNameSnapshot());
+            newItem.setQuantity(oldItem.getQuantity());
+            newItem.setPosition(oldItem.getPosition());
+          return newItem;
+        }).toList();
+      packageVersionItemRepository.saveAll(newPackageVersionItems);
+    }
+    else{
+      List<MedicalItem> medicalItems = medicalItemRepository.findAllByPublicIdIn(dto.medicalItems().items()
+        .stream()
+        .map(MedicalPackageItemAddDto::medicalItemPublicId).toList());
+
+      if(medicalItems.size() != dto.medicalItems().items().size()) {
+        throw new NotFoundException(
+            CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Một hoặc nhiều hạng mục y tế không tồn tại");
+      }
+
+      List<PackageVersionItem> packageVersionItems = createListPackageVersionItem(newVersion, medicalItems, dto.medicalItems());
+      packageVersionItemRepository.saveAll(packageVersionItems);
+    }
+
     // TODO(specialties): pass findSpecialtyIds(medicalPackage) to the response
     return MedicalPackageResponseDto.from(medicalPackage, newVersion);
+  }
+
+  private List<PackageVersionItem> createListPackageVersionItem(PackageVersion newVersion, List<MedicalItem> medicalItems, MedicalPackageItemAddListDto medicalPackageItemAddListDto) {
+    List<PackageVersionItem> packageVersionItems = medicalItems.stream().map(medicalItem -> {
+      PackageVersionItem item = new PackageVersionItem();
+      item.setPackageVersion(newVersion);
+      item.setItem(medicalItem);
+      item.setInstructionSnapshot(medicalItem.getInstruction());
+      item.setItemNameSnapshot(medicalItem.getName());
+      item.setQuantity(medicalPackageItemAddListDto.items().stream()
+          .filter(i -> i.medicalItemPublicId().equals(medicalItem.getPublicId()))
+          .findFirst()
+          .orElseThrow(() -> new NotFoundException(
+              CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Hạng mục y tế không tồn tại"))
+          .quantity());
+      item.setPosition(medicalPackageItemAddListDto.items().stream()
+          .filter(i -> i.medicalItemPublicId().equals(medicalItem.getPublicId()))
+          .findFirst()
+          .orElseThrow(() -> new NotFoundException(
+              CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Hạng mục y tế không tồn tại"))
+          .position());
+      return item;
+    }).toList();
+    packageVersionItemRepository.saveAll(packageVersionItems);
+    return packageVersionItems;
   }
 }
