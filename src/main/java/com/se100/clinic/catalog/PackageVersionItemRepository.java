@@ -1,9 +1,9 @@
 package com.se100.clinic.catalog;
 
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.util.List;
-
-public interface PackageVersionItemRepository extends JpaRepository<PackageVersionItem, Long> {
-  List<PackageVersionItem> findAllByPackageVersionIdInOrderByPositionAsc(Long id);
+interface PackageVersionItemRepository
+    extends JpaRepository<PackageVersionItem, PackageVersionItemId> {
+  List<PackageVersionItem> findAllByPackageVersionIdOrderByPositionAsc(Long packageVersionId);
 }

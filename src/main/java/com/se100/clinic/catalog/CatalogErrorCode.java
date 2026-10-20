@@ -12,7 +12,6 @@ enum CatalogErrorCode implements ErrorCode {
   MEDICAL_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND),
   MEDICAL_ITEM_EXISTS(HttpStatus.CONFLICT);
 
-
   private final HttpStatus status;
 
   CatalogErrorCode(HttpStatus status) {
