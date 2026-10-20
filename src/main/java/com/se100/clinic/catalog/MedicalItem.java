@@ -31,7 +31,7 @@ class MedicalItem extends BaseAuditEntity {
   @Column(name = "public_id", nullable = false, unique = true)
   private UUID publicId = UUID.randomUUID();
 
-  @Column(name = "name", nullable = false, length = 200)
+  @Column(name = "name", nullable = false, unique = true, length = 200)
   private String name;
 
   @Enumerated(EnumType.STRING)

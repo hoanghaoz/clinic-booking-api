@@ -127,7 +127,7 @@ class CatalogMappingTest {
         "updated_at");
     assertNullable(table, "description", "instruction");
     assertIdentityUuid(metadata, table);
-    assertUniqueColumns(table, "public_id");
+    assertUniqueColumns(table, "public_id", "name");
     assertLength(table, "name", 200);
     assertText(metadata, table, "description", "instruction");
     assertMoney(metadata, entity, "price", "price");
