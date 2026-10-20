@@ -12,15 +12,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.net.URI;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.net.URI;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/medical-items")
@@ -68,12 +67,10 @@ class MedicalItemController {
   @Operation(summary = "Tìm kiếm hạng mục y tế")
   @ApiResponse(responseCode = "200", description = "Kết quả tìm kiếm")
   ApiResult<List<MedicalItemResponseDto>> searchMedicalItems(
-    @ParameterObject @Valid CatalogDtos.MedicalItemSearchRequestDto request,
-    @ParameterObject PageParams pageParams
-    ) {
-    Pageable pageable = pageParams.toPageable(
-      MedicalItemService.SORTABLE_FIELDS, MedicalItemService.DEFAULT_SORT
-    );
+      @ParameterObject @Valid CatalogDtos.MedicalItemSearchRequestDto request,
+      @ParameterObject PageParams pageParams) {
+    Pageable pageable =
+        pageParams.toPageable(MedicalItemService.SORTABLE_FIELDS, MedicalItemService.DEFAULT_SORT);
     return ApiResult.of(medicalItemService.searchMedicalItems(request, pageable));
   }
 }

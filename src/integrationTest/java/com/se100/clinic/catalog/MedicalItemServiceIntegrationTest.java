@@ -7,6 +7,7 @@ import com.se100.clinic.AbstractIntegrationTest;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateBatchDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemResponseDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalItemSearchRequestDto;
 import com.se100.clinic.catalog.enums.MedicalItemType;
 import com.se100.clinic.shared.error.ConflictException;
 import java.math.BigDecimal;
@@ -15,6 +16,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 /** Real Postgres: checks the unique name constraint and the all-or-nothing batch. */
 class MedicalItemServiceIntegrationTest extends AbstractIntegrationTest {
@@ -87,5 +90,56 @@ class MedicalItemServiceIntegrationTest extends AbstractIntegrationTest {
 
     assertThatThrownBy(() -> medicalItemRepository.saveAndFlush(duplicate))
         .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  private void createItem(String name, MedicalItemType type, String price) {
+    medicalItemService.createMedicalItem(
+        new MedicalItemCreateDto(name, type, new BigDecimal(price), null, null));
+  }
+
+  private List<String> searchNames(MedicalItemSearchRequestDto request, Sort sort) {
+    return medicalItemService.searchMedicalItems(request, PageRequest.of(0, 50, sort)).stream()
+        .map(MedicalItemResponseDto::name)
+        .toList();
+  }
+
+  @Test
+  void search_shouldMatchKeywordIgnoringCase_andTreatWildcardsLiterally() {
+    String tag = tag();
+    createItem("Siêu âm tim " + tag, MedicalItemType.IMAGING, "100");
+    createItem("Xét nghiệm 100% " + tag, MedicalItemType.LAB, "100");
+    createItem("Xét nghiệm 1000 " + tag, MedicalItemType.LAB, "100");
+
+    assertThat(
+            searchNames(
+                new MedicalItemSearchRequestDto("SIÊU ÂM TIM " + tag, null, null, null),
+                Sort.by("name")))
+        .containsExactly("Siêu âm tim " + tag);
+    // '%' is escaped, so only the name holding a literal "100%" matches.
+    assertThat(
+            searchNames(
+                new MedicalItemSearchRequestDto("100% " + tag, null, null, null), Sort.by("name")))
+        .containsExactly("Xét nghiệm 100% " + tag);
+  }
+
+  @Test
+  void search_shouldFilterByTypeAndInclusivePriceRange_andSort() {
+    String tag = tag();
+    createItem("Low " + tag, MedicalItemType.LAB, "100");
+    createItem("Mid " + tag, MedicalItemType.LAB, "200");
+    createItem("High " + tag, MedicalItemType.LAB, "300");
+    createItem("Scan " + tag, MedicalItemType.IMAGING, "200");
+
+    var range =
+        new MedicalItemSearchRequestDto(
+            tag, MedicalItemType.LAB, new BigDecimal("100"), new BigDecimal("200"));
+    assertThat(searchNames(range, Sort.by(Sort.Direction.DESC, "price")))
+        .containsExactly("Mid " + tag, "Low " + tag);
+
+    assertThat(
+            searchNames(
+                new MedicalItemSearchRequestDto(tag, MedicalItemType.IMAGING, null, null),
+                Sort.by("name")))
+        .containsExactly("Scan " + tag);
   }
 }

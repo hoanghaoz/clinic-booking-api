@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateBatchDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemResponseDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalItemSearchRequestDto;
 import com.se100.clinic.catalog.enums.MedicalItemType;
 import com.se100.clinic.shared.error.BusinessException;
 import com.se100.clinic.shared.error.CommonErrorCode;
@@ -24,6 +26,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class MedicalItemServiceTest {
@@ -42,7 +49,7 @@ class MedicalItemServiceTest {
     MedicalItemResponseDto result = service.createMedicalItem(dto("  Xét nghiệm máu  "));
 
     assertThat(result.name()).isEqualTo("Xét nghiệm máu");
-    assertThat(result.medicalItemType()).isEqualTo(MedicalItemType.LAB);
+    assertThat(result.type()).isEqualTo(MedicalItemType.LAB);
     assertThat(result.price()).isEqualByComparingTo("50000");
     verify(medicalItemRepository).saveAndFlush(any(MedicalItem.class));
   }
@@ -102,5 +109,40 @@ class MedicalItemServiceTest {
         .extracting(e -> ((ConflictException) e).getErrorCode())
         .isEqualTo(CatalogErrorCode.MEDICAL_ITEM_EXISTS);
     verify(medicalItemRepository, never()).saveAllAndFlush(anyList());
+  }
+
+  @Test
+  void search_shouldThrowValidation_whenMinPriceGreaterThanMaxPrice() {
+    var request =
+        new MedicalItemSearchRequestDto(null, null, new BigDecimal("200"), new BigDecimal("100"));
+
+    assertThatThrownBy(() -> service.searchMedicalItems(request, PageRequest.of(0, 20)))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e ->
+                assertThat(e.getViolations())
+                    .extracting(FieldViolation::field)
+                    .containsExactly("minPrice"));
+    verify(medicalItemRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+  }
+
+  @Test
+  void search_shouldMapPageAndPassPageableThrough() {
+    MedicalItem entity = new MedicalItem();
+    entity.setName("Siêu âm");
+    entity.setType(MedicalItemType.IMAGING);
+    entity.setPrice(new BigDecimal("300000"));
+    Pageable pageable = PageRequest.of(1, 5);
+    when(medicalItemRepository.findAll(any(Specification.class), eq(pageable)))
+        .thenReturn(new PageImpl<>(List.of(entity), pageable, 6));
+
+    Page<MedicalItemResponseDto> page =
+        service.searchMedicalItems(
+            new MedicalItemSearchRequestDto(null, null, null, null), pageable);
+
+    assertThat(page.getTotalElements()).isEqualTo(6);
+    assertThat(page.getContent())
+        .extracting(MedicalItemResponseDto::name, MedicalItemResponseDto::type)
+        .containsExactly(org.assertj.core.groups.Tuple.tuple("Siêu âm", MedicalItemType.IMAGING));
   }
 }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateBatchDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalItemSearchRequestDto;
 import com.se100.clinic.catalog.enums.MedicalItemType;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
@@ -38,7 +39,7 @@ class MedicalItemDtoValidationTest {
                 new MedicalItemCreateDto(" ", null, BigDecimal.ONE, null, null)));
 
     assertThat(paths(validator.validate(batch)))
-        .containsExactly("items[1].price", "items[2].medicalItemType", "items[2].name");
+        .containsExactly("items[1].price", "items[2].name", "items[2].type");
   }
 
   @Test
@@ -57,5 +58,16 @@ class MedicalItemDtoValidationTest {
     var batch = new MedicalItemCreateBatchDto(Collections.singletonList(null));
 
     assertThat(paths(validator.validate(batch))).containsExactly("items[0].<list element>");
+  }
+
+  @Test
+  void search_shouldRejectKeywordLongerThan200Characters() {
+    var tooLong = new MedicalItemSearchRequestDto("a".repeat(201), null, null, null);
+    var ok = new MedicalItemSearchRequestDto("a".repeat(200), null, null, null);
+
+    assertThat(validator.validate(tooLong))
+        .extracting(v -> v.getPropertyPath().toString())
+        .containsExactly("keyword");
+    assertThat(validator.validate(ok)).isEmpty();
   }
 }

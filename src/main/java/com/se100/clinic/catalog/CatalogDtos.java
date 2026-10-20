@@ -7,7 +7,6 @@ import com.se100.clinic.catalog.enums.TargetGender;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -132,12 +131,12 @@ public final class CatalogDtos {
     }
   }
 
-  @Schema(requiredProperties = {"name", "medicalItemType", "price"})
+  @Schema(requiredProperties = {"name", "type", "price"})
   public record MedicalItemCreateDto(
       @NotBlank(message = "Tên hạng mục không được để trống")
           @Size(max = 200, message = "Tên hạng mục tối đa 200 ký tự")
           String name,
-      @NotNull(message = "Loại hạng mục không được để trống") MedicalItemType medicalItemType,
+      @NotNull(message = "Loại hạng mục không được để trống") MedicalItemType type,
       @NotNull(message = "Giá hạng mục không được để trống")
           @PositiveOrZero(message = "Giá hạng mục không được âm")
           BigDecimal price,
@@ -153,7 +152,7 @@ public final class CatalogDtos {
       UUID publicId,
       String name,
       BigDecimal price,
-      MedicalItemType medicalItemType,
+      MedicalItemType type,
       String description,
       String instruction) {
     static MedicalItemResponseDto from(MedicalItem medicalItem) {
@@ -168,8 +167,8 @@ public final class CatalogDtos {
   }
 
   public record MedicalItemSearchRequestDto(
-      String keyword,
-      MedicalItemType medicalItemType,
+      @Size(max = 200, message = "keyword không được vượt quá 200 ký tự") String keyword,
+      MedicalItemType type,
       BigDecimal minPrice,
       BigDecimal maxPrice) {}
 }
