@@ -1,12 +1,8 @@
 package com.se100.clinic.catalog;
 
-import static com.se100.clinic.catalog.CatalogDtos.*;
-
 import com.se100.clinic.catalog.enums.TargetGender;
 import com.se100.clinic.shared.error.*;
 import jakarta.persistence.criteria.Predicate;
-import java.time.Instant;
-import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +10,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.*;
+
+import static com.se100.clinic.catalog.CatalogDtos.*;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +28,8 @@ public class MedicalPackageService {
   private static final int MAX_MINOR_VERSION = 10;
   private final MedicalPackageRepository medicalPackageRepository;
   private final PackageVersionRepository packageVersionRepository;
+  private final MedicalItemRepository medicalItemRepository;
+  private final PackageVersionItemRepository packageVersionItemRepository;
 
   // TODO(specialties): imports needed when re-enabled: SpecialtyService (doctor module),
   // BusinessException (shared.error) and java.util.List.
@@ -208,6 +211,15 @@ public class MedicalPackageService {
           CatalogErrorCode.MEDICAL_PACKAGE_EXISTS, "Mã gói khám '" + dto.code() + "' đã tồn tại");
     }
     // TODO(specialties): List<Long> specialtyIds = validateSpecialties(dto.specialtyIds());
+    List<MedicalItem> medicalItems = medicalItemRepository.findAllByPublicIdIn(dto.medicalItems().items()
+      .stream()
+      .map(MedicalPackageItemAddDto::medicalItemPublicId).toList());
+
+    if(medicalItems.size() != dto.medicalItems().items().size()) {
+      throw new NotFoundException(
+          CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Một hoặc nhiều hạng mục y tế không tồn tại");
+    }
+    // TODO(specialties): validate that all medical items are valid for the package
     MedicalPackage medicalPackage = new MedicalPackage();
     medicalPackage.setCode(dto.code());
     medicalPackage.setName(dto.name());
@@ -217,6 +229,23 @@ public class MedicalPackageService {
         createNewPackageVersion(dto, new PackageVersion(), medicalPackage);
     packageVersionRepository.save(packageVersion);
     // TODO(specialties): savePackageSpecialties(medicalPackage, specialtyIds);
+
+    PackageVersionItem packageVersionItem = new PackageVersionItem();
+    List<PackageVersionItem> packageVersionItems = medicalItems.stream().map(medicalItem -> {
+      PackageVersionItem item = new PackageVersionItem();
+      item.setPackageVersion(packageVersion);
+      item.setItem(medicalItem);
+      item.setInstructionSnapshot(medicalItem.getInstruction());
+      item.setItemNameSnapshot(medicalItem.getName());
+      item.setQuantity(dto.medicalItems().items().stream()
+          .filter(i -> i.medicalItemPublicId().equals(medicalItem.getPublicId()))
+          .findFirst()
+          .orElseThrow(() -> new NotFoundException(
+              CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Hạng mục y tế không tồn tại"))
+          .quantity());
+      return item;
+    }).toList();
+    packageVersionItemRepository.saveAll(packageVersionItems);
     return MedicalPackageResponseDto.from(medicalPackage, packageVersion);
   }
 
