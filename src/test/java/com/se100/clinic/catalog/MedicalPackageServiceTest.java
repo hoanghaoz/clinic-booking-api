@@ -132,7 +132,9 @@ class MedicalPackageServiceTest {
     when(medicalPackageRepository.findByCode("HPV3")).thenReturn(Optional.of(new MedicalPackage()));
 
     assertThatThrownBy(() -> service.createMedicalPackage(dto))
-        .isInstanceOf(ConflictException.class);
+        .isInstanceOf(ConflictException.class)
+        .extracting(e -> ((ConflictException) e).getErrorCode())
+        .isEqualTo(CatalogErrorCode.MEDICAL_PACKAGE_EXISTS);
   }
 
   @Test
@@ -188,7 +190,9 @@ class MedicalPackageServiceTest {
             null, null, null, null, null, null, null, null, null, null, null);
 
     assertThatThrownBy(() -> service.updateMedicalPackage(dto, publicId))
-        .isInstanceOf(NotFoundException.class);
+        .isInstanceOf(NotFoundException.class)
+        .extracting(e -> ((NotFoundException) e).getErrorCode())
+        .isEqualTo(CatalogErrorCode.MEDICAL_PACKAGE_NOT_FOUND);
   }
 
   @Test
