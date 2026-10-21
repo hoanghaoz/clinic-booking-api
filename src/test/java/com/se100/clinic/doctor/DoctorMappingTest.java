@@ -76,15 +76,24 @@ class DoctorMappingTest {
     assertThat(table.getColumns())
         .extracting(Column::getName)
         .containsExactlyInAnyOrder(
-            "id", "public_id", "user_id", "name", "status", "degree", "created_at", "updated_at");
+            "id",
+            "public_id",
+            "user_id",
+            "code",
+            "name",
+            "status",
+            "degree",
+            "created_at",
+            "updated_at");
     assertThat(table.getColumns()).allMatch(column -> !column.isNullable());
     assertThat(column(table, "id").isIdentity()).isTrue();
     assertThat(column(table, "public_id").getSqlType(metadata)).isEqualTo("uuid");
     assertThat(column(table, "name").getLength()).isEqualTo(150L);
     assertThat(column(table, "degree").getLength()).isEqualTo(100L);
+    assertThat(column(table, "code").getLength()).isEqualTo(50L);
     assertThat(table.getColumns().stream().filter(Column::isUnique))
         .extracting(Column::getName)
-        .containsExactlyInAnyOrder("public_id", "user_id");
+        .containsExactlyInAnyOrder("public_id", "user_id", "code");
     var status = (BasicValue) doctor.getProperty("status").getValue();
     assertThat(status.getEnumeratedType()).isEqualTo(EnumType.STRING);
     assertThat(status.getType().getReturnedClass().getName())
