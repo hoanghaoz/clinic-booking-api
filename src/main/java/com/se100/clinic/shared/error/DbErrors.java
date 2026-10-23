@@ -58,6 +58,10 @@ public final class DbErrors {
     return UNIQUE_VIOLATION.equals(sqlState(error));
   }
 
+  public static boolean isForeignKeyViolation(Throwable error) {
+    return FOREIGN_KEY_VIOLATION.equals(sqlState(error));
+  }
+
   /** True for {@code EXCLUDE USING gist} violations — e.g. two overlapping appointments. */
   public static boolean isExclusionViolation(Throwable error) {
     return EXCLUSION_VIOLATION.equals(sqlState(error));
