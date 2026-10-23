@@ -146,8 +146,11 @@ public class SpecialtyService {
     };
   }
 
-  /** Make user input literal in a LIKE pattern: {@code %} and {@code _} are wildcards otherwise. */
-  private static String escapeLike(String raw) {
+  /**
+   * Make user input literal in a LIKE pattern: {@code %} and {@code _} are wildcards otherwise.
+   * Package-private so {@link DoctorService} reuses it.
+   */
+  static String escapeLike(String raw) {
     return raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
   }
 }
