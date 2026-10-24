@@ -1,8 +1,9 @@
 /**
  * Module {@code doctor} — specialties (ChuyenKhoa) and doctors (BacSi), docs/de-tai.md section B.
  *
- * <p><b>THIS IS THE SAMPLE MODULE.</b> Only Specialty CRUD is implemented. When starting a new
- * module, copy this package's STRUCTURE (not its business content):
+ * <p><b>THIS IS THE SAMPLE MODULE.</b> Specialty CRUD ({@code /api/v1/specialties}) is the
+ * reference implementation; Doctor management ({@code /api/v1/doctors}) follows the same pattern.
+ * When starting a new module, copy this package's STRUCTURE (not its business content):
  *
  * <ul>
  *   <li>{@code XxxController} — package-private; HTTP routing only, no business logic
