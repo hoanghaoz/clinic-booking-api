@@ -1,8 +1,7 @@
 package com.se100.clinic.shared.error;
 
-import lombok.Getter;
-
 import java.util.List;
+import lombok.Getter;
 
 /**
  * Base class for expected, business-level failures. Carries an {@link ErrorCode}; {@link
@@ -22,10 +21,8 @@ import java.util.List;
 public class BusinessException extends RuntimeException {
 
   private final ErrorCode errorCode;
-  /**
-   * -- GETTER --
-   * Field-level details; empty unless the failure is about specific input fields.
-   */
+
+  /** -- GETTER -- Field-level details; empty unless the failure is about specific input fields. */
   private final transient List<FieldViolation> violations;
 
   public BusinessException(ErrorCode errorCode, String message) {
@@ -37,5 +34,4 @@ public class BusinessException extends RuntimeException {
     this.errorCode = errorCode;
     this.violations = List.copyOf(violations);
   }
-
 }

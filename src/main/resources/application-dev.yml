@@ -4,6 +4,15 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
+    # Sort tags and endpoints alphabetically so the list stays stable as modules grow.
+    tags-sorter: alpha
+    operations-sorter: alpha
+    # Show how long each "Try it out" call took.
+    display-request-duration: true
+    # Keep the entered Authorization token across page reloads (useful once JWT exists).
+    persist-authorization: true
+    # Collapse all tags on load; expand only the one being worked on.
+    doc-expansion: none
 
 logging:
   level:
