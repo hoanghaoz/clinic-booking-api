@@ -3,12 +3,11 @@ package com.se100.clinic.shared;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.List;
-import java.util.Set;
-
 import com.se100.clinic.shared.error.BusinessException;
 import com.se100.clinic.shared.error.CommonErrorCode;
 import com.se100.clinic.shared.error.FieldViolation;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
