@@ -17,8 +17,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.se100.clinic.doctor.SpecialtyDtos.SpecialtyResponse;
-import com.se100.clinic.shared.GlobalExceptionHandler;
-import com.se100.clinic.shared.NotFoundException;
+import com.se100.clinic.shared.error.GlobalExceptionHandler;
+import com.se100.clinic.shared.error.NotFoundException;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;

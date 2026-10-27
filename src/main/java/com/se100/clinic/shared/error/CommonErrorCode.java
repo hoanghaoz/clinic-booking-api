@@ -1,4 +1,4 @@
-package com.se100.clinic.shared;
+package com.se100.clinic.shared.error;
 
 import org.springframework.http.HttpStatus;
 

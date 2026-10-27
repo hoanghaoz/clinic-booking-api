@@ -1,4 +1,4 @@
-package com.se100.clinic.shared;
+package com.se100.clinic.shared.api;
 
 /**
  * Constants for Swagger annotations, so every controller documents errors the same way. The {@code

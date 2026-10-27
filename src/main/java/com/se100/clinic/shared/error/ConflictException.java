@@ -1,4 +1,4 @@
-package com.se100.clinic.shared;
+package com.se100.clinic.shared.error;
 
 /**
  * Thrown when a request conflicts with current state, e.g. creating a specialty whose code already

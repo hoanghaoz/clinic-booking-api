@@ -6,7 +6,7 @@ import com.se100.clinic.AbstractIntegrationTest;
 import com.se100.clinic.doctor.SpecialtyDtos.CreateSpecialtyRequest;
 import com.se100.clinic.doctor.SpecialtyDtos.SpecialtyResponse;
 import com.se100.clinic.doctor.SpecialtyDtos.UpdateSpecialtyRequest;
-import com.se100.clinic.shared.ApiResult;
+import com.se100.clinic.shared.api.ApiResult;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;

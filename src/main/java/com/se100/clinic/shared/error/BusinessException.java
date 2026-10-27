@@ -1,6 +1,7 @@
-package com.se100.clinic.shared;
+package com.se100.clinic.shared.error;
 
 import java.util.List;
+import lombok.Getter;
 
 /**
  * Base class for expected, business-level failures. Carries an {@link ErrorCode}; {@link
@@ -16,9 +17,12 @@ import java.util.List;
  * <p>Never put sensitive data (national ID, medical history...) in the message — it is returned to
  * the client.
  */
+@Getter
 public class BusinessException extends RuntimeException {
 
   private final ErrorCode errorCode;
+
+  /** -- GETTER -- Field-level details; empty unless the failure is about specific input fields. */
   private final transient List<FieldViolation> violations;
 
   public BusinessException(ErrorCode errorCode, String message) {
@@ -29,14 +33,5 @@ public class BusinessException extends RuntimeException {
     super(message);
     this.errorCode = errorCode;
     this.violations = List.copyOf(violations);
-  }
-
-  public ErrorCode getErrorCode() {
-    return errorCode;
-  }
-
-  /** Field-level details; empty unless the failure is about specific input fields. */
-  public List<FieldViolation> getViolations() {
-    return violations;
   }
 }

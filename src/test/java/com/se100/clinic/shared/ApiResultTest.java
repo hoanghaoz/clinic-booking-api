@@ -2,6 +2,7 @@ package com.se100.clinic.shared;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.se100.clinic.shared.api.ApiResult;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
