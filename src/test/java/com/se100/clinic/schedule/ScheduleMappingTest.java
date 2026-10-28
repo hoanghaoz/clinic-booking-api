@@ -121,11 +121,8 @@ class ScheduleMappingTest {
     assertThat(table.getColumns().stream().filter(Column::isUnique))
         .extracting(Column::getName)
         .containsExactly("public_id");
-    assertThat(table.getUniqueKeys().values())
-        .extracting(key -> key.getColumns().stream().map(Column::getName).toList())
-        .contains(
-            List.of("doctor_id", "work_date", "shift_id"),
-            List.of("room_id", "work_date", "shift_id"));
+    // Exclusion constraints covering real time overlap live in Flyway, not JPA metadata.
+    assertThat(table.getUniqueKeys()).isEmpty();
     assertThat(table.getIndexes().values())
         .extracting(index -> index.getSelectables().stream().map(Selectable::getText).toList())
         .containsExactly(List.of("work_date", "status"));
