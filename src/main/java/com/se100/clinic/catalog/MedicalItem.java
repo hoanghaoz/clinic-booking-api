@@ -16,6 +16,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Table(name = "medical_items")
@@ -46,4 +47,9 @@ class MedicalItem extends BaseAuditEntity {
 
   @Column(name = "instruction", columnDefinition = "text")
   private String instruction;
+
+  // Soft delete: items stay referenced by package versions, services and medical orders.
+  @Column(name = "active", nullable = false)
+  @ColumnDefault("true")
+  private boolean active = true;
 }

@@ -18,7 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MedicalItemService {
 
-  public static final Set<String> SORTABLE_FIELDS = Set.of("name", "type", "price", "createdAt");
+  public static final Set<String> SORTABLE_FIELDS =
+      Set.of("name", "type", "price", "active", "createdAt");
   public static final Sort DEFAULT_SORT = Sort.by("name");
   private final MedicalItemRepository medicalItemRepository;
 
@@ -59,6 +60,9 @@ public class MedicalItemService {
 
       if (request.type() != null) {
         predicates.add(cb.equal(root.get("type"), request.type()));
+      }
+      if (request.active() != null) {
+        predicates.add(cb.equal(root.get("active"), request.active()));
       }
       return cb.and(predicates.toArray(Predicate[]::new));
     });
@@ -127,6 +131,43 @@ public class MedicalItemService {
       throw asNameConflict(e, "Hạng mục '" + name + "' đã tồn tại");
     }
     return MedicalItemResponseDto.from(medicalItem);
+  }
+
+  @Transactional
+  public MedicalItemResponseDto updateMedicalItem(UUID publicId, MedicalItemUpdateDto request) {
+    MedicalItem medicalItem = findOrThrow(publicId);
+    String name = normalizedName(request.name());
+    if (medicalItemRepository.existsByNameAndIdNot(name, medicalItem.getId())) {
+      throw new ConflictException(
+          CatalogErrorCode.MEDICAL_ITEM_EXISTS, "Hạng mục '" + name + "' đã tồn tại");
+    }
+    medicalItem.setName(name);
+    medicalItem.setType(request.type());
+    medicalItem.setPrice(request.price());
+    medicalItem.setDescription(request.description());
+    medicalItem.setInstruction(request.instruction());
+    try {
+      // Flush now so a concurrent duplicate surfaces here and not at commit time.
+      medicalItemRepository.saveAndFlush(medicalItem);
+    } catch (DataIntegrityViolationException e) {
+      throw asNameConflict(e, "Hạng mục '" + name + "' đã tồn tại");
+    }
+    return MedicalItemResponseDto.from(medicalItem);
+  }
+
+  /** Soft delete; deactivating an already inactive item is not an error. */
+  @Transactional
+  public void deactivateMedicalItem(UUID publicId) {
+    findOrThrow(publicId).setActive(false);
+  }
+
+  private MedicalItem findOrThrow(UUID publicId) {
+    return medicalItemRepository
+        .findByPublicId(publicId)
+        .orElseThrow(
+            () ->
+                new NotFoundException(
+                    CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Không tìm thấy hạng mục y tế"));
   }
 
   /** All-or-nothing: any invalid or duplicate item rejects the whole batch. */

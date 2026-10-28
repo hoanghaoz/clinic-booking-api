@@ -387,6 +387,15 @@ public class MedicalPackageService {
       throw new NotFoundException(
           CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Không tìm thấy hạng mục y tế: " + missing);
     }
+    String inactive =
+        found.values().stream()
+            .filter(item -> !item.isActive())
+            .map(item -> item.getPublicId().toString())
+            .collect(Collectors.joining(", "));
+    if (!inactive.isEmpty()) {
+      throw new ConflictException(
+          CatalogErrorCode.MEDICAL_ITEM_INACTIVE, "Hạng mục y tế đã ngưng hoạt động: " + inactive);
+    }
     return found;
   }
 

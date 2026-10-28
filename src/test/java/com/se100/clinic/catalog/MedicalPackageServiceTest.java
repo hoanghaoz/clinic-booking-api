@@ -214,6 +214,71 @@ class MedicalPackageServiceTest {
   }
 
   @Test
+  void create_shouldThrowConflict_whenItemIsInactive() {
+    MedicalItem item = new MedicalItem();
+    item.setName("Retired item");
+    item.setActive(false);
+    var dto =
+        new MedicalPackageCreateDto(
+            "HPV3",
+            "HPV package",
+            null,
+            null,
+            null,
+            null,
+            null,
+            PackageStatus.OPENING,
+            BigDecimal.TEN,
+            PackageClass.STANDARD,
+            30,
+            new MedicalPackageItemAddListDto(
+                List.of(new MedicalPackageItemAddDto(item.getPublicId(), 1, 1))),
+            null);
+    when(medicalPackageRepository.findByCode("HPV3")).thenReturn(Optional.empty());
+    when(medicalItemRepository.findAllByPublicIdIn(any())).thenReturn(List.of(item));
+
+    assertThatThrownBy(() -> service.createMedicalPackage(dto))
+        .isInstanceOf(ConflictException.class)
+        .extracting(e -> ((ConflictException) e).getErrorCode())
+        .isEqualTo(CatalogErrorCode.MEDICAL_ITEM_INACTIVE);
+    verify(medicalPackageRepository, never()).save(any());
+  }
+
+  @Test
+  void update_shouldThrowConflict_whenNewItemIsInactive_andChangeNothing() {
+    UUID publicId = UUID.randomUUID();
+    MedicalPackage pkg = packageOf("HPV3", "Old name");
+    PackageVersion old = versionOf(pkg, "v1.0", new BigDecimal("100"));
+    MedicalItem item = new MedicalItem();
+    item.setActive(false);
+    when(medicalPackageRepository.findByPublicId(publicId)).thenReturn(Optional.of(pkg));
+    when(packageVersionRepository.findFirstByMedicalPackageOrderByEffectiveFromDesc(pkg))
+        .thenReturn(Optional.of(old));
+    when(medicalItemRepository.findAllByPublicIdIn(any())).thenReturn(List.of(item));
+    var dto =
+        new MedicalPackageUpdateDto(
+            "New name",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            new MedicalPackageItemAddListDto(
+                List.of(new MedicalPackageItemAddDto(item.getPublicId(), 1, 1))),
+            null);
+
+    assertThatThrownBy(() -> service.updateMedicalPackage(dto, publicId))
+        .isInstanceOf(ConflictException.class);
+    assertThat(pkg.getName()).isEqualTo("Old name");
+    assertThat(old.getEffectiveTo()).isNull();
+    verify(packageVersionRepository, never()).save(any());
+  }
+
+  @Test
   void update_shouldThrowNotFound_whenPackageMissing() {
     UUID publicId = UUID.randomUUID();
     when(medicalPackageRepository.findByPublicId(publicId)).thenReturn(Optional.empty());

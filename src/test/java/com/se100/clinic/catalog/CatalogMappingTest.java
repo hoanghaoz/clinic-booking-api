@@ -123,9 +123,12 @@ class CatalogMappingTest {
         "price",
         "description",
         "instruction",
+        "active",
         "created_at",
         "updated_at");
     assertNullable(table, "description", "instruction");
+    assertThat(column(table, "active").getSqlType(metadata)).isEqualTo("boolean");
+    assertThat(column(table, "active").getDefaultValue()).isEqualTo("true");
     assertIdentityUuid(metadata, table);
     assertUniqueColumns(table, "public_id", "name");
     assertLength(table, "name", 200);

@@ -172,13 +172,28 @@ public final class CatalogDtos {
           @Size(max = 100, message = "Mỗi lần chỉ tạo tối đa 100 hạng mục")
           List<@NotNull(message = "Hạng mục không được null") @Valid MedicalItemCreateDto> items) {}
 
+  /** Full replacement of an item: description and instruction sent as null are cleared. */
+  @Schema(requiredProperties = {"name", "type", "price"})
+  public record MedicalItemUpdateDto(
+      @NotBlank(message = "Tên hạng mục không được để trống")
+          @Size(max = 200, message = "Tên hạng mục tối đa 200 ký tự")
+          String name,
+      @NotNull(message = "Loại hạng mục không được để trống") MedicalItemType type,
+      @NotNull(message = "Giá hạng mục không được để trống")
+          @PositiveOrZero(message = "Giá hạng mục không được âm")
+          BigDecimal price,
+      String description,
+      String instruction) {}
+
+  @Schema(requiredProperties = {"publicId", "name", "price", "type", "active"})
   public record MedicalItemResponseDto(
       UUID publicId,
       String name,
       BigDecimal price,
       MedicalItemType type,
       String description,
-      String instruction) {
+      String instruction,
+      boolean active) {
     static MedicalItemResponseDto from(MedicalItem medicalItem) {
       return new MedicalItemResponseDto(
           medicalItem.getPublicId(),
@@ -186,7 +201,8 @@ public final class CatalogDtos {
           medicalItem.getPrice(),
           medicalItem.getType(),
           medicalItem.getDescription(),
-          medicalItem.getInstruction());
+          medicalItem.getInstruction(),
+          medicalItem.isActive());
     }
   }
 
@@ -194,7 +210,8 @@ public final class CatalogDtos {
       @Size(max = 200, message = "keyword không được vượt quá 200 ký tự") String keyword,
       MedicalItemType type,
       BigDecimal minPrice,
-      BigDecimal maxPrice) {}
+      BigDecimal maxPrice,
+      Boolean active) {}
 
   public record MedicalPackageItemAddDto(
       @NotNull(message = "medicalItemPublicId không được để trống") UUID medicalItemPublicId,

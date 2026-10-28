@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateBatchDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemSearchRequestDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalItemUpdateDto;
 import com.se100.clinic.catalog.enums.MedicalItemType;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
@@ -62,12 +63,28 @@ class MedicalItemDtoValidationTest {
 
   @Test
   void search_shouldRejectKeywordLongerThan200Characters() {
-    var tooLong = new MedicalItemSearchRequestDto("a".repeat(201), null, null, null);
-    var ok = new MedicalItemSearchRequestDto("a".repeat(200), null, null, null);
+    var tooLong = new MedicalItemSearchRequestDto("a".repeat(201), null, null, null, null);
+    var ok = new MedicalItemSearchRequestDto("a".repeat(200), null, null, null, null);
 
     assertThat(validator.validate(tooLong))
         .extracting(v -> v.getPropertyPath().toString())
         .containsExactly("keyword");
     assertThat(validator.validate(ok)).isEmpty();
+  }
+
+  @Test
+  void update_shouldAcceptValidAndReportEachInvalidField() {
+    var ok = new MedicalItemUpdateDto("Name", MedicalItemType.LAB, BigDecimal.ZERO, null, null);
+    var bad = new MedicalItemUpdateDto(" ", null, new BigDecimal("-1"), null, null);
+    var tooLong =
+        new MedicalItemUpdateDto("a".repeat(201), MedicalItemType.LAB, BigDecimal.ONE, null, null);
+
+    assertThat(validator.validate(ok)).isEmpty();
+    assertThat(validator.validate(bad))
+        .extracting(v -> v.getPropertyPath().toString())
+        .containsExactlyInAnyOrder("name", "type", "price");
+    assertThat(validator.validate(tooLong))
+        .extracting(v -> v.getPropertyPath().toString())
+        .containsExactly("name");
   }
 }
