@@ -56,7 +56,8 @@ class ScheduleController {
   @PostMapping
   @AdminOnly
   @Operation(summary = "Admin phân công bác sĩ theo cơ sở, phòng, ngày và ca")
-  ResponseEntity<ApiResult<ScheduleResponse>> create(@Valid @RequestBody SaveScheduleRequest request) {
+  ResponseEntity<ApiResult<ScheduleResponse>> create(
+      @Valid @RequestBody SaveScheduleRequest request) {
     ScheduleResponse created = service.create(request);
     return ResponseEntity.created(URI.create("/api/v1/doctor-schedules/" + created.publicId()))
         .body(ApiResult.of(created));
@@ -101,8 +102,7 @@ class ScheduleController {
                         ScheduleErrorCode.DOCTOR_PROFILE_NOT_FOUND,
                         "Tài khoản chưa liên kết với hồ sơ bác sĩ"));
     return ApiResult.of(
-        service.list(
-            doctorId, clinicId, null, fromDate, toDate, null, servicePage(pageParams)));
+        service.list(doctorId, clinicId, null, fromDate, toDate, null, servicePage(pageParams)));
   }
 
   @GetMapping("/availability")

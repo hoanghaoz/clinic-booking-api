@@ -2,8 +2,8 @@ package com.se100.clinic.facility;
 
 import com.se100.clinic.facility.enums.FacilityStatus;
 import jakarta.persistence.EntityManager;
-import java.util.Optional;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

@@ -15,8 +15,14 @@ public final class ScheduleDtos {
 
   @Schema(
       requiredProperties = {
-        "doctorId", "specialtyId", "clinicId", "roomId", "shiftId", "workDate",
-        "generalCapacity", "specialistCapacity"
+        "doctorId",
+        "specialtyId",
+        "clinicId",
+        "roomId",
+        "shiftId",
+        "workDate",
+        "generalCapacity",
+        "specialistCapacity"
       })
   public record SaveScheduleRequest(
       @NotNull @Positive Long doctorId,
@@ -36,7 +42,11 @@ public final class ScheduleDtos {
       Long id, String code, String name, LocalTime startTime, LocalTime endTime) {
     static ShiftResponse from(Shift shift) {
       return new ShiftResponse(
-          shift.getId(), shift.getCode(), shift.getName(), shift.getStartTime(), shift.getEndTime());
+          shift.getId(),
+          shift.getCode(),
+          shift.getName(),
+          shift.getStartTime(),
+          shift.getEndTime());
     }
   }
 

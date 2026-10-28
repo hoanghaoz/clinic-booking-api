@@ -55,13 +55,7 @@ public class ScheduleAvailabilityService {
     }
     Page<ScheduleDtos.ScheduleResponse> matches =
         schedules.list(
-            doctorId,
-            clinicId,
-            specialtyId,
-            fromDate,
-            toDate,
-            ScheduleStatus.OPEN,
-            pageable);
+            doctorId, clinicId, specialtyId, fromDate, toDate, ScheduleStatus.OPEN, pageable);
     return matches.map(
         response -> {
           DoctorSchedule schedule =

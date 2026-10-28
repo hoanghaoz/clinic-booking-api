@@ -7,7 +7,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Read-only doctor facts exposed to the schedule module without sharing entities or repositories. */
+/**
+ * Read-only doctor facts exposed to the schedule module without sharing entities or repositories.
+ */
 @Service
 @RequiredArgsConstructor
 public class DoctorSchedulingService {

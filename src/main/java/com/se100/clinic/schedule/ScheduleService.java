@@ -115,8 +115,7 @@ public class ScheduleService {
     DoctorSchedule schedule = requireSchedule(publicId);
     if (status == ScheduleStatus.CANCELLED && appointments.hasAppointments(schedule.getId())) {
       throw new ConflictException(
-          ScheduleErrorCode.SCHEDULE_HAS_APPOINTMENTS,
-          "Không thể hủy ca đã có lịch hẹn");
+          ScheduleErrorCode.SCHEDULE_HAS_APPOINTMENTS, "Không thể hủy ca đã có lịch hẹn");
     }
     if (status == ScheduleStatus.OPEN) {
       ensureNoOverlap(
@@ -185,8 +184,11 @@ public class ScheduleService {
         slotRepository
             .findByIdAndScheduleId(slotId, schedule.getId())
             .orElseThrow(
-                () -> new NotFoundException(ScheduleErrorCode.SLOT_NOT_FOUND, "Không tìm thấy ô giờ"));
-    boolean occupied = appointments.reservations(schedule.getId()).occupiedSlotIds().contains(slotId);
+                () ->
+                    new NotFoundException(
+                        ScheduleErrorCode.SLOT_NOT_FOUND, "Không tìm thấy ô giờ"));
+    boolean occupied =
+        appointments.reservations(schedule.getId()).occupiedSlotIds().contains(slotId);
     if (occupied && status == SlotStatus.BLOCKED) {
       throw new ConflictException(ScheduleErrorCode.SLOT_OCCUPIED, "Ô giờ đã có lịch hẹn");
     }
@@ -205,7 +207,8 @@ public class ScheduleService {
     return shiftRepository
         .findById(id)
         .orElseThrow(
-            () -> new NotFoundException(ScheduleErrorCode.SHIFT_NOT_FOUND, "Không tìm thấy mẫu ca"));
+            () ->
+                new NotFoundException(ScheduleErrorCode.SHIFT_NOT_FOUND, "Không tìm thấy mẫu ca"));
   }
 
   private void validateAssignment(
@@ -214,8 +217,7 @@ public class ScheduleService {
       throw new BusinessException(ScheduleErrorCode.INVALID_SHIFT, "Chỉ hỗ trợ ba ca cố định");
     }
     int minutes = (int) Duration.between(start, end).toMinutes();
-    if (request.generalCapacity() > minutes / 20
-        || request.specialistCapacity() > minutes / 30) {
+    if (request.generalCapacity() > minutes / 20 || request.specialistCapacity() > minutes / 30) {
       throw new BusinessException(
           ScheduleErrorCode.INVALID_CAPACITY, "Giới hạn lượt vượt thời lượng ca");
     }
@@ -235,7 +237,9 @@ public class ScheduleService {
         facilities
             .roomAssignment(request.roomId())
             .orElseThrow(
-                () -> new NotFoundException(ScheduleErrorCode.ROOM_NOT_FOUND, "Không tìm thấy phòng"));
+                () ->
+                    new NotFoundException(
+                        ScheduleErrorCode.ROOM_NOT_FOUND, "Không tìm thấy phòng"));
     if (!room.clinicId().equals(request.clinicId())) {
       throw new ConflictException(
           ScheduleErrorCode.ROOM_CLINIC_MISMATCH, "Phòng không thuộc cơ sở được chọn");
@@ -264,9 +268,9 @@ public class ScheduleService {
 
   private void ensureNoOverlap(
       Long doctorId, Long roomId, Instant start, Instant end, Long excludeId) {
-    if (scheduleRepository.overlapsDoctor(
-            doctorId, start, end, ScheduleStatus.CANCELLED, excludeId)
-        || scheduleRepository.overlapsRoom(roomId, start, end, ScheduleStatus.CANCELLED, excludeId)) {
+    if (scheduleRepository.overlapsDoctor(doctorId, start, end, ScheduleStatus.CANCELLED, excludeId)
+        || scheduleRepository.overlapsRoom(
+            roomId, start, end, ScheduleStatus.CANCELLED, excludeId)) {
       throw new ConflictException(
           ScheduleErrorCode.SCHEDULE_OVERLAP, "Bác sĩ hoặc phòng đã được phân công trong giờ này");
     }
@@ -281,7 +285,11 @@ public class ScheduleService {
   }
 
   private static void apply(
-      DoctorSchedule schedule, SaveScheduleRequest request, Shift shift, Instant start, Instant end) {
+      DoctorSchedule schedule,
+      SaveScheduleRequest request,
+      Shift shift,
+      Instant start,
+      Instant end) {
     schedule.setDoctorId(request.doctorId());
     schedule.setSpecialtyId(request.specialtyId());
     schedule.setRoomId(request.roomId());
@@ -295,7 +303,9 @@ public class ScheduleService {
 
   private static List<DoctorScheduleSlot> generateSlots(DoctorSchedule schedule) {
     List<DoctorScheduleSlot> slots = new ArrayList<>();
-    for (Instant at = schedule.getStartAt(); at.isBefore(schedule.getEndAt()); at = at.plusSeconds(600)) {
+    for (Instant at = schedule.getStartAt();
+        at.isBefore(schedule.getEndAt());
+        at = at.plusSeconds(600)) {
       DoctorScheduleSlot slot = new DoctorScheduleSlot();
       slot.setSchedule(schedule);
       slot.setStartAt(at);
@@ -318,7 +328,8 @@ public class ScheduleService {
         facilities
             .roomAssignment(schedule.getRoomId())
             .orElseThrow(
-                () -> new NotFoundException(ScheduleErrorCode.ROOM_NOT_FOUND, "Không tìm thấy phòng"))
+                () ->
+                    new NotFoundException(ScheduleErrorCode.ROOM_NOT_FOUND, "Không tìm thấy phòng"))
             .clinicId();
     return ScheduleResponse.from(schedule, clinicId);
   }
