@@ -1,10 +1,10 @@
 package com.se100.clinic.schedule;
 
 import com.se100.clinic.appointment.AppointmentSchedulingService;
-import com.se100.clinic.appointment.AppointmentSchedulingService.DoctorQueueItem;
 import com.se100.clinic.doctor.DoctorSchedulingService;
 import com.se100.clinic.facility.FacilitySchedulingService;
 import com.se100.clinic.facility.FacilitySchedulingService.RoomAssignment;
+import com.se100.clinic.schedule.ScheduleDtos.DoctorQueueResponse;
 import com.se100.clinic.schedule.ScheduleDtos.SaveScheduleRequest;
 import com.se100.clinic.schedule.ScheduleDtos.ScheduleResponse;
 import com.se100.clinic.schedule.ScheduleDtos.ShiftResponse;
@@ -352,6 +352,4 @@ public class ScheduleService {
           ScheduleErrorCode.INVALID_DATE_RANGE, "fromDate phải trước hoặc bằng toDate");
     }
   }
-
-  public record DoctorQueueResponse(ScheduleResponse schedule, List<DoctorQueueItem> patients) {}
 }

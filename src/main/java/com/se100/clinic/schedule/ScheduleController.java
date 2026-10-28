@@ -2,14 +2,14 @@ package com.se100.clinic.schedule;
 
 import com.se100.clinic.auth.AuthenticatedUserService;
 import com.se100.clinic.doctor.DoctorSchedulingService;
-import com.se100.clinic.schedule.ScheduleAvailabilityService.AvailableSchedule;
+import com.se100.clinic.schedule.ScheduleDtos.AvailableSchedule;
 import com.se100.clinic.schedule.ScheduleDtos.ChangeScheduleStatusRequest;
 import com.se100.clinic.schedule.ScheduleDtos.ChangeSlotStatusRequest;
+import com.se100.clinic.schedule.ScheduleDtos.DoctorQueueResponse;
 import com.se100.clinic.schedule.ScheduleDtos.SaveScheduleRequest;
 import com.se100.clinic.schedule.ScheduleDtos.ScheduleResponse;
 import com.se100.clinic.schedule.ScheduleDtos.ShiftResponse;
 import com.se100.clinic.schedule.ScheduleDtos.SlotResponse;
-import com.se100.clinic.schedule.ScheduleService.DoctorQueueResponse;
 import com.se100.clinic.schedule.enums.ScheduleStatus;
 import com.se100.clinic.shared.PageParams;
 import com.se100.clinic.shared.annotation.AdminOnly;

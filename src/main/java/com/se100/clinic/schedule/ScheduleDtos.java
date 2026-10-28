@@ -1,5 +1,6 @@
 package com.se100.clinic.schedule;
 
+import com.se100.clinic.appointment.AppointmentSchedulingService.DoctorQueueItem;
 import com.se100.clinic.schedule.enums.ScheduleStatus;
 import com.se100.clinic.schedule.enums.SlotStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -8,6 +9,7 @@ import jakarta.validation.constraints.Positive;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 
 public final class ScheduleDtos {
@@ -38,6 +40,7 @@ public final class ScheduleDtos {
 
   public record ChangeSlotStatusRequest(@NotNull SlotStatus status) {}
 
+  @Schema(requiredProperties = {"id", "code", "name", "startTime", "endTime"})
   public record ShiftResponse(
       Long id, String code, String name, LocalTime startTime, LocalTime endTime) {
     static ShiftResponse from(Shift shift) {
@@ -50,6 +53,22 @@ public final class ScheduleDtos {
     }
   }
 
+  @Schema(
+      requiredProperties = {
+        "publicId",
+        "doctorId",
+        "specialtyId",
+        "clinicId",
+        "roomId",
+        "shiftId",
+        "shiftCode",
+        "workDate",
+        "startAt",
+        "endAt",
+        "generalCapacity",
+        "specialistCapacity",
+        "status"
+      })
   public record ScheduleResponse(
       UUID publicId,
       Long doctorId,
@@ -82,6 +101,7 @@ public final class ScheduleDtos {
     }
   }
 
+  @Schema(requiredProperties = {"id", "startAt", "endAt", "status", "occupied"})
   public record SlotResponse(
       Long id, Instant startAt, Instant endAt, SlotStatus status, boolean occupied) {
     static SlotResponse from(DoctorScheduleSlot slot, boolean occupied) {
@@ -90,6 +110,17 @@ public final class ScheduleDtos {
     }
   }
 
+  @Schema(
+      requiredProperties = {
+        "schedulePublicId",
+        "doctorId",
+        "specialtyId",
+        "clinicId",
+        "roomId",
+        "startAt",
+        "endAt",
+        "durationMinutes"
+      })
   public record AvailableWindow(
       UUID schedulePublicId,
       Long doctorId,
@@ -99,4 +130,11 @@ public final class ScheduleDtos {
       Instant startAt,
       Instant endAt,
       int durationMinutes) {}
+
+  @Schema(requiredProperties = {"schedule", "windows", "full"})
+  public record AvailableSchedule(
+      ScheduleResponse schedule, List<AvailableWindow> windows, boolean full) {}
+
+  @Schema(requiredProperties = {"schedule", "patients"})
+  public record DoctorQueueResponse(ScheduleResponse schedule, List<DoctorQueueItem> patients) {}
 }

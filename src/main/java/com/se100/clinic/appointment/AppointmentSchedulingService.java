@@ -1,6 +1,7 @@
 package com.se100.clinic.appointment;
 
 import com.se100.clinic.appointment.enums.AppointmentStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.EntityManager;
 import java.time.Duration;
 import java.time.Instant;
@@ -99,6 +100,15 @@ public class AppointmentSchedulingService {
         scheduleId);
   }
 
+  @Schema(
+      requiredProperties = {
+        "appointmentPublicId",
+        "appointmentCode",
+        "patientPublicId",
+        "patientName",
+        "status",
+        "startAt"
+      })
   public record DoctorQueueItem(
       UUID appointmentPublicId,
       String appointmentCode,

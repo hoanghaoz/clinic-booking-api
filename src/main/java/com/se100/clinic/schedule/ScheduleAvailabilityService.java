@@ -2,6 +2,7 @@ package com.se100.clinic.schedule;
 
 import com.se100.clinic.appointment.AppointmentSchedulingService;
 import com.se100.clinic.appointment.AppointmentSchedulingService.ReservationSnapshot;
+import com.se100.clinic.schedule.ScheduleDtos.AvailableSchedule;
 import com.se100.clinic.schedule.ScheduleDtos.AvailableWindow;
 import com.se100.clinic.schedule.enums.ScheduleStatus;
 import com.se100.clinic.schedule.enums.SlotStatus;
@@ -111,7 +112,4 @@ public class ScheduleAvailabilityService {
     }
     return result;
   }
-
-  public record AvailableSchedule(
-      ScheduleDtos.ScheduleResponse schedule, List<AvailableWindow> windows, boolean full) {}
 }
