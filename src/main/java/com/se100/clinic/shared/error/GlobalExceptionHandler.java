@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -120,6 +121,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return problem(
         CommonErrorCode.CONFLICT,
         "Dữ liệu vừa được thay đổi bởi người khác, vui lòng tải lại và thử lại",
+        List.of());
+  }
+
+  /** A row lock was not granted in time (e.g. another request is rolling the same package). */
+  @ExceptionHandler(PessimisticLockingFailureException.class)
+  public ProblemDetail handlePessimisticLock(PessimisticLockingFailureException ex) {
+    log.warn("Pessimistic lock failure: {}", ex.getClass().getSimpleName());
+    return problem(
+        CommonErrorCode.CONFLICT,
+        "Dữ liệu đang được người khác cập nhật, vui lòng thử lại sau giây lát",
         List.of());
   }
 

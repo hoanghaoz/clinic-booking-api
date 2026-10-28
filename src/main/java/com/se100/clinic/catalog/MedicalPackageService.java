@@ -6,11 +6,13 @@ import com.se100.clinic.catalog.enums.TargetGender;
 import com.se100.clinic.shared.error.*;
 import jakarta.persistence.criteria.Predicate;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -20,10 +22,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MedicalPackageService {
-  // Sort fields are PackageVersion properties: the list is built from current versions.
+  // Sort fields use the response names; the list is built from current versions, so they are
+  // mapped onto PackageVersion properties in toEntitySort.
   public static final Set<String> SORTABLE_FIELDS =
-      Set.of("code", "name", "status", "unitPrice", "createdAt");
+      Set.of("code", "name", "status", "price", "createdAt");
   public static final Sort DEFAULT_SORT = Sort.by("name");
+
+  public static final Set<String> VERSION_SORTABLE_FIELDS = Set.of("effectiveFrom", "createdAt");
+  public static final Sort VERSION_DEFAULT_SORT = Sort.by(Sort.Order.desc("effectiveFrom"));
+
+  // Every field null = keep the current values; used to roll a version when only items change.
+  private static final MedicalPackageUpdateDto NO_CHANGES =
+      new MedicalPackageUpdateDto(
+          null, null, null, null, null, null, null, null, null, null, null, null);
 
   private static final String FIRST_VERSION = "v1.0";
   private static final int MAX_MINOR_VERSION = 10;
@@ -53,8 +64,37 @@ public class MedicalPackageService {
     version.setPackageClass(coalesce(dto.packageClass(), base.getPackageClass()));
     version.setConsultationMinutes(
         coalesce(dto.consultationMinutes(), base.getConsultationMinutes()));
-    version.setEffectiveFrom(coalesce(dto.effectiveFrom(), Instant.now()));
+    // Postgres keeps microseconds: truncate so the response equals what a later read returns.
+    version.setEffectiveFrom(
+        coalesce(dto.effectiveFrom(), Instant.now().truncatedTo(ChronoUnit.MICROS)));
+    validateAgeRange(version);
     return version;
+  }
+
+  /** Checked on the merged version, so an update that sets only one bound is covered too. */
+  private static void validateAgeRange(PackageVersion version) {
+    if (version.getMinAge() != null
+        && version.getMaxAge() != null
+        && version.getMinAge() > version.getMaxAge()) {
+      throw new BusinessException(
+          CommonErrorCode.VALIDATION_ERROR,
+          "Dữ liệu gửi lên không hợp lệ",
+          List.of(new FieldViolation("minAge", "minAge phải nhỏ hơn hoặc bằng maxAge")));
+    }
+  }
+
+  /** Renames the API sort field {@code price} to the entity property {@code unitPrice}. */
+  private static Pageable toEntitySort(Pageable pageable) {
+    Sort sort =
+        Sort.by(
+            pageable.getSort().stream()
+                .map(
+                    order ->
+                        "price".equals(order.getProperty())
+                            ? order.withProperty("unitPrice")
+                            : order)
+                .toList());
+    return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
   }
 
   private static <T> T coalesce(T value, T fallback) {
@@ -200,8 +240,143 @@ public class MedicalPackageService {
       MedicalPackageSearchRequestDto request, Pageable pageable) {
     validateSearchRequest(request);
     return packageVersionRepository
-        .findAll(matching(request), pageable)
+        .findAll(matching(request), toEntitySort(pageable))
         .map(version -> MedicalPackageResponseDto.from(version.getMedicalPackage(), version));
+  }
+
+  /** The package with its current version and that version's items. */
+  @Transactional(readOnly = true)
+  public MedicalPackageDetailResponseDto getMedicalPackage(UUID packagePublicId) {
+    MedicalPackage medicalPackage = findPackage(packagePublicId);
+    PackageVersion currentVersion = findCurrentVersion(medicalPackage);
+    return MedicalPackageDetailResponseDto.from(
+        medicalPackage, currentVersion, versionItems(currentVersion));
+  }
+
+  /**
+   * @param pageable already validated by {@code PageParams#toPageable}
+   */
+  @Transactional(readOnly = true)
+  public Page<PackageVersionResponseDto> listVersions(UUID packagePublicId, Pageable pageable) {
+    MedicalPackage medicalPackage = findPackage(packagePublicId);
+    return packageVersionRepository
+        .findAllByMedicalPackage(medicalPackage, pageable)
+        .map(PackageVersionResponseDto::from);
+  }
+
+  @Transactional(readOnly = true)
+  public PackageVersionDetailResponseDto getVersion(UUID packagePublicId, String version) {
+    MedicalPackage medicalPackage = findPackage(packagePublicId);
+    PackageVersion packageVersion =
+        packageVersionRepository
+            .findByMedicalPackageAndVersion(medicalPackage, version)
+            .orElseThrow(
+                () ->
+                    new NotFoundException(
+                        CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND,
+                        "Không tìm thấy phiên bản '" + version + "' của gói khám"));
+    return PackageVersionDetailResponseDto.from(packageVersion, versionItems(packageVersion));
+  }
+
+  private MedicalPackage findPackage(UUID packagePublicId) {
+    return medicalPackageRepository
+        .findByPublicId(packagePublicId)
+        .orElseThrow(MedicalPackageService::packageNotFound);
+  }
+
+  /**
+   * For writers that roll a new version: takes the package row lock, and must run before the
+   * current version is read, so a writer that had to wait sees the version the other one created.
+   */
+  private MedicalPackage findPackageForUpdate(UUID packagePublicId) {
+    return medicalPackageRepository
+        .findByPublicIdForUpdate(packagePublicId)
+        .orElseThrow(MedicalPackageService::packageNotFound);
+  }
+
+  private static NotFoundException packageNotFound() {
+    return new NotFoundException(
+        CatalogErrorCode.MEDICAL_PACKAGE_NOT_FOUND, "Không tìm thấy gói khám");
+  }
+
+  private PackageVersion findCurrentVersion(MedicalPackage medicalPackage) {
+    return packageVersionRepository
+        .findFirstByMedicalPackageOrderByEffectiveFromDesc(medicalPackage)
+        .orElseThrow(
+            () ->
+                new NotFoundException(
+                    CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND,
+                    "Không tìm thấy phiên bản của gói khám"));
+  }
+
+  private List<PackageVersionItem> versionItems(PackageVersion packageVersion) {
+    return packageVersionItemRepository.findAllByPackageVersionIdOrderByPositionAsc(
+        packageVersion.getId());
+  }
+
+  /**
+   * Item changes never edit a version: each one rolls the package to a new version whose rows are
+   * copies of the current ones (old snapshots kept) plus the change.
+   */
+  @Transactional
+  public PackageVersionDetailResponseDto addPackageItem(
+      UUID packagePublicId, MedicalPackageItemAddDto request) {
+    MedicalPackage medicalPackage = findPackageForUpdate(packagePublicId);
+    PackageVersion current = findCurrentVersion(medicalPackage);
+    List<PackageVersionItem> rows = versionItems(current);
+    if (findRow(rows, request.medicalItemPublicId()).isPresent()) {
+      throw new ConflictException(
+          CatalogErrorCode.MEDICAL_PACKAGE_ITEM_EXISTS, "Hạng mục đã có trong gói khám");
+    }
+    requirePositionFree(rows, request.position(), request.medicalItemPublicId());
+    // Unknown (404) and inactive (409) items are rejected here, before any version is created.
+    Map<UUID, MedicalItem> itemsById =
+        loadMedicalItems(new MedicalPackageItemAddListDto(List.of(request)));
+
+    PackageVersion next = startNextVersion(medicalPackage, current);
+    List<PackageVersionItem> nextRows = new ArrayList<>(copyVersionItems(rows, next));
+    nextRows.addAll(toVersionItems(next, List.of(request), itemsById));
+    return saveVersionItems(next, nextRows);
+  }
+
+  /** A request that changes nothing returns the current version instead of rolling a new one. */
+  @Transactional
+  public PackageVersionDetailResponseDto updatePackageItem(
+      UUID packagePublicId, UUID medicalItemPublicId, MedicalPackageItemUpdateDto request) {
+    MedicalPackage medicalPackage = findPackageForUpdate(packagePublicId);
+    PackageVersion current = findCurrentVersion(medicalPackage);
+    List<PackageVersionItem> rows = versionItems(current);
+    PackageVersionItem row = findRowOrThrow(rows, medicalItemPublicId);
+    if (row.getQuantity().equals(request.quantity())
+        && row.getPosition().equals(request.position())) {
+      return PackageVersionDetailResponseDto.from(current, rows);
+    }
+    requirePositionFree(rows, request.position(), medicalItemPublicId);
+
+    PackageVersion next = startNextVersion(medicalPackage, current);
+    List<PackageVersionItem> nextRows = new ArrayList<>(copyVersionItems(rows, next));
+    PackageVersionItem changed = findRowOrThrow(nextRows, medicalItemPublicId);
+    changed.setQuantity(request.quantity());
+    changed.setPosition(request.position());
+    return saveVersionItems(next, nextRows);
+  }
+
+  @Transactional
+  public PackageVersionDetailResponseDto removePackageItem(
+      UUID packagePublicId, UUID medicalItemPublicId) {
+    MedicalPackage medicalPackage = findPackageForUpdate(packagePublicId);
+    PackageVersion current = findCurrentVersion(medicalPackage);
+    List<PackageVersionItem> rows = versionItems(current);
+    findRowOrThrow(rows, medicalItemPublicId);
+    if (rows.size() == 1) {
+      throw new ConflictException(
+          CatalogErrorCode.MEDICAL_PACKAGE_ITEMS_REQUIRED, "Gói khám phải có ít nhất một hạng mục");
+    }
+
+    PackageVersion next = startNextVersion(medicalPackage, current);
+    List<PackageVersionItem> remaining =
+        rows.stream().filter(row -> !isItem(row, medicalItemPublicId)).toList();
+    return saveVersionItems(next, new ArrayList<>(copyVersionItems(remaining, next)));
   }
 
   @Transactional
@@ -231,21 +406,8 @@ public class MedicalPackageService {
   @Transactional
   public MedicalPackageResponseDto updateMedicalPackage(
       MedicalPackageUpdateDto dto, UUID packagePublicId) {
-    MedicalPackage medicalPackage =
-        medicalPackageRepository
-            .findByPublicId(packagePublicId)
-            .orElseThrow(
-                () ->
-                    new NotFoundException(
-                        CatalogErrorCode.MEDICAL_PACKAGE_NOT_FOUND, "Không tìm thấy gói khám"));
-    PackageVersion currentVersion =
-        packageVersionRepository
-            .findFirstByMedicalPackageOrderByEffectiveFromDesc(medicalPackage)
-            .orElseThrow(
-                () ->
-                    new NotFoundException(
-                        CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND,
-                        "Không tìm thấy phiên bản của gói khám"));
+    MedicalPackage medicalPackage = findPackageForUpdate(packagePublicId);
+    PackageVersion currentVersion = findCurrentVersion(medicalPackage);
     // Validate the new items before anything is changed.
     Map<UUID, MedicalItem> itemsById =
         dto.medicalItems() == null ? null : loadMedicalItems(dto.medicalItems());
@@ -310,6 +472,15 @@ public class MedicalPackageService {
       throw new NotFoundException(
           CatalogErrorCode.MEDICAL_ITEM_NOT_FOUND, "Không tìm thấy hạng mục y tế: " + missing);
     }
+    String inactive =
+        found.values().stream()
+            .filter(item -> !item.isActive())
+            .map(item -> item.getPublicId().toString())
+            .collect(Collectors.joining(", "));
+    if (!inactive.isEmpty()) {
+      throw new ConflictException(
+          CatalogErrorCode.MEDICAL_ITEM_INACTIVE, "Hạng mục y tế đã ngưng hoạt động: " + inactive);
+    }
     return found;
   }
 
@@ -334,11 +505,64 @@ public class MedicalPackageService {
         .toList();
   }
 
-  /** Copies the rows as they are, keeping the old snapshots. */
+  /**
+   * Closes {@code current} where the new version starts, keeping every field of {@code current}.
+   */
+  private PackageVersion startNextVersion(MedicalPackage medicalPackage, PackageVersion current) {
+    PackageVersion next = createNewPackageVersion(NO_CHANGES, current, medicalPackage);
+    current.setEffectiveTo(next.getEffectiveFrom());
+    packageVersionRepository.save(next);
+    return next;
+  }
+
+  private PackageVersionDetailResponseDto saveVersionItems(
+      PackageVersion version, List<PackageVersionItem> rows) {
+    rows.sort(Comparator.comparing(PackageVersionItem::getPosition));
+    packageVersionItemRepository.saveAll(rows);
+    return PackageVersionDetailResponseDto.from(version, rows);
+  }
+
+  private static boolean isItem(PackageVersionItem row, UUID medicalItemPublicId) {
+    return row.getItem().getPublicId().equals(medicalItemPublicId);
+  }
+
+  private static Optional<PackageVersionItem> findRow(
+      List<PackageVersionItem> rows, UUID medicalItemPublicId) {
+    return rows.stream().filter(row -> isItem(row, medicalItemPublicId)).findFirst();
+  }
+
+  private static PackageVersionItem findRowOrThrow(
+      List<PackageVersionItem> rows, UUID medicalItemPublicId) {
+    return findRow(rows, medicalItemPublicId)
+        .orElseThrow(
+            () ->
+                new NotFoundException(
+                    CatalogErrorCode.MEDICAL_PACKAGE_ITEM_NOT_FOUND,
+                    "Hạng mục không nằm trong gói khám"));
+  }
+
+  /** The position of {@code medicalItemPublicId} itself does not count as taken. */
+  private static void requirePositionFree(
+      List<PackageVersionItem> rows, Integer position, UUID medicalItemPublicId) {
+    boolean taken =
+        rows.stream()
+            .anyMatch(
+                row -> row.getPosition().equals(position) && !isItem(row, medicalItemPublicId));
+    if (taken) {
+      throw new ConflictException(
+          CatalogErrorCode.MEDICAL_PACKAGE_ITEM_POSITION_TAKEN,
+          "Vị trí " + position + " đã có hạng mục khác");
+    }
+  }
+
   private List<PackageVersionItem> copyVersionItems(PackageVersion from, PackageVersion to) {
-    return packageVersionItemRepository
-        .findAllByPackageVersionIdOrderByPositionAsc(from.getId())
-        .stream()
+    return copyVersionItems(versionItems(from), to);
+  }
+
+  /** Copies the rows as they are, keeping the old snapshots. */
+  private static List<PackageVersionItem> copyVersionItems(
+      List<PackageVersionItem> rows, PackageVersion to) {
+    return rows.stream()
         .map(
             old -> {
               PackageVersionItem copy = new PackageVersionItem();

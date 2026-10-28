@@ -21,6 +21,24 @@ services:
       timeout: 5s
       retries: 10
 
+  clinic-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:${DB_PORT:-5432}/${DB_NAME:-clinic_booking}
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-clinic}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-clinic}
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: ${MAIL_PORT:-1025}
+    env_file:
+      - .env
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   mailpit:
     image: axllent/mailpit:v1.31.3
     ports:
