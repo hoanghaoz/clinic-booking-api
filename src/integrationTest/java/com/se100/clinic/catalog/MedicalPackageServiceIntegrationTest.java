@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.se100.clinic.AbstractIntegrationTest;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalItemResponseDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageCreateDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageItemAddDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageItemAddListDto;
@@ -14,10 +15,17 @@ import com.se100.clinic.catalog.enums.MedicalItemType;
 import com.se100.clinic.catalog.enums.PackageClass;
 import com.se100.clinic.catalog.enums.PackageStatus;
 import com.se100.clinic.catalog.enums.TargetGender;
+import com.se100.clinic.shared.error.ConflictException;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -259,5 +267,119 @@ class MedicalPackageServiceIntegrationTest extends AbstractIntegrationTest {
             30,
             oneItem(),
             Instant.parse("2026-01-01T00:00:00Z")));
+  }
+
+  /**
+   * Runs the tasks on separate threads, released together by a latch so they really overlap, and
+   * returns each outcome: the value, or the exception it threw.
+   */
+  private static <T> List<Object> runConcurrently(List<Callable<T>> tasks) throws Exception {
+    var pool = Executors.newFixedThreadPool(tasks.size());
+    var start = new CountDownLatch(1);
+    try {
+      List<Future<Object>> futures =
+          tasks.stream()
+              .map(
+                  task ->
+                      pool.submit(
+                          () -> {
+                            start.await();
+                            try {
+                              return (Object) task.call();
+                            } catch (Exception e) {
+                              return e;
+                            }
+                          }))
+              .toList();
+      start.countDown();
+      List<Object> outcomes = new ArrayList<>();
+      for (var future : futures) {
+        outcomes.add(future.get(30, TimeUnit.SECONDS));
+      }
+      return outcomes;
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  private MedicalItemResponseDto createItem() {
+    return medicalItemService.createMedicalItem(
+        new MedicalItemCreateDto(
+            "Item " + UUID.randomUUID(), MedicalItemType.LAB, BigDecimal.TEN, null, null));
+  }
+
+  private List<String> versionNames(UUID packagePublicId) {
+    return medicalPackageService
+        .listVersions(packagePublicId, PageRequest.of(0, 50, Sort.by("effectiveFrom")))
+        .map(CatalogDtos.PackageVersionResponseDto::version)
+        .toList();
+  }
+
+  @Test
+  void addPackageItem_shouldRunOneAfterAnother_whenTwoRequestsOverlap() throws Exception {
+    MedicalPackageResponseDto created = newPackage(tag(), PackageStatus.OPENING);
+    var second = createItem();
+    var third = createItem();
+
+    List<Object> outcomes =
+        runConcurrently(
+            List.of(
+                () ->
+                    medicalPackageService.addPackageItem(
+                        created.publicId(), new MedicalPackageItemAddDto(second.publicId(), 1, 2)),
+                () ->
+                    medicalPackageService.addPackageItem(
+                        created.publicId(), new MedicalPackageItemAddDto(third.publicId(), 1, 3))));
+
+    // without the row lock one of them hits the unique (package_id, version) constraint
+    assertThat(outcomes).noneMatch(outcome -> outcome instanceof Exception);
+    assertThat(versionNames(created.publicId())).containsExactly("v1.0", "v1.1", "v1.2");
+    assertThat(medicalPackageService.getMedicalPackage(created.publicId()).medicalItems())
+        .hasSize(3);
+  }
+
+  @Test
+  void addPackageItem_shouldAddOnce_whenTheSameRequestIsSentTwiceAtTheSameTime() throws Exception {
+    MedicalPackageResponseDto created = newPackage(tag(), PackageStatus.OPENING);
+    var extra = createItem();
+    var request = new MedicalPackageItemAddDto(extra.publicId(), 1, 2);
+
+    List<Object> outcomes =
+        runConcurrently(
+            List.of(
+                () -> medicalPackageService.addPackageItem(created.publicId(), request),
+                () -> medicalPackageService.addPackageItem(created.publicId(), request)));
+
+    assertThat(outcomes).filteredOn(outcome -> !(outcome instanceof Exception)).hasSize(1);
+    assertThat(outcomes)
+        .filteredOn(outcome -> outcome instanceof Exception)
+        .singleElement()
+        .isInstanceOfSatisfying(
+            ConflictException.class,
+            e ->
+                assertThat(e.getErrorCode())
+                    .isEqualTo(CatalogErrorCode.MEDICAL_PACKAGE_ITEM_EXISTS));
+    assertThat(versionNames(created.publicId())).containsExactly("v1.0", "v1.1");
+  }
+
+  @Test
+  void updatePackageItem_shouldRollOnlyOneVersion_whenTheSameChangeIsSentTwice() throws Exception {
+    MedicalPackageResponseDto created = newPackage(tag(), PackageStatus.OPENING);
+    UUID itemId =
+        medicalPackageService
+            .getMedicalPackage(created.publicId())
+            .medicalItems()
+            .get(0)
+            .medicalItemPublicId();
+    var change = new CatalogDtos.MedicalPackageItemUpdateDto(9, 1);
+
+    List<Object> outcomes =
+        runConcurrently(
+            List.of(
+                () -> medicalPackageService.updatePackageItem(created.publicId(), itemId, change),
+                () -> medicalPackageService.updatePackageItem(created.publicId(), itemId, change)));
+
+    assertThat(outcomes).noneMatch(outcome -> outcome instanceof Exception);
+    assertThat(versionNames(created.publicId())).containsExactly("v1.0", "v1.1");
   }
 }

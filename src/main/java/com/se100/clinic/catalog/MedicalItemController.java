@@ -103,6 +103,21 @@ class MedicalItemController {
     return ResponseEntity.noContent().build();
   }
 
+  @PostMapping("/{publicId}/activate")
+  @Operation(
+      summary = "Kích hoạt lại hạng mục y tế đã ngưng",
+      description =
+          "Hoàn tác thao tác ngưng hoạt động: hạng mục lại thêm được vào gói khám. Gọi lại trên"
+              + " hạng mục đang hoạt động vẫn trả 200.")
+  @ApiResponse(
+      responseCode = "404",
+      description = "MEDICAL_ITEM_NOT_FOUND",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  ApiResult<MedicalItemResponseDto> activateMedicalItem(@PathVariable UUID publicId) {
+    return ApiResult.of(medicalItemService.activateMedicalItem(publicId));
+  }
+
   @GetMapping
   @Operation(
       summary = "Tìm kiếm / danh sách hạng mục y tế (phân trang)",

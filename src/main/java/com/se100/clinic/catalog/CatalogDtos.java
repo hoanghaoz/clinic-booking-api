@@ -222,6 +222,16 @@ public final class CatalogDtos {
           @Positive(message = "Vị trí phải là số dương")
           Integer position) {}
 
+  /** New quantity and position of one item already in the package. */
+  @Schema(requiredProperties = {"quantity", "position"})
+  public record MedicalPackageItemUpdateDto(
+      @NotNull(message = "quantity không được để trống")
+          @Positive(message = "quantity phải là số nguyên dương")
+          Integer quantity,
+      @NotNull(message = "position không được để trống")
+          @Positive(message = "Vị trí phải là số dương")
+          Integer position) {}
+
   public record MedicalPackageItemAddListDto(
       @NotEmpty(message = "Danh sách hạng mục không được để trống")
           @Size(max = 100, message = "Mỗi lần chỉ thêm tối đa 100 hạng mục")

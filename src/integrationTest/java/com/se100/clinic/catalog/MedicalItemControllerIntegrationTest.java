@@ -124,6 +124,30 @@ class MedicalItemControllerIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void activate_shouldRestoreDeletedItem_andReturn404ForUnknownItem() {
+    String tag = tag();
+    MedicalItemResponseDto item = newItem("Revive " + tag);
+    medicalItemService.deactivateMedicalItem(item.publicId());
+    assertThat(search(tag, true)).isEmpty();
+
+    ResponseEntity<ApiResult<MedicalItemResponseDto>> response =
+        restTemplate.exchange(
+            BASE + "/" + item.publicId() + "/activate", HttpMethod.POST, null, ONE);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody().data().active()).isTrue();
+    assertThat(search(tag, true))
+        .extracting(MedicalItemResponseDto::publicId)
+        .containsExactly(item.publicId());
+    assertError(
+        HttpMethod.POST,
+        BASE + "/" + UUID.randomUUID() + "/activate",
+        null,
+        HttpStatus.NOT_FOUND,
+        "MEDICAL_ITEM_NOT_FOUND");
+  }
+
+  @Test
   void delete_shouldReturn404_whenItemDoesNotExist() {
     assertError(
         HttpMethod.DELETE,

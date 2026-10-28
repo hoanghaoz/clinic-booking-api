@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -113,6 +114,11 @@ class GlobalExceptionHandlerTest {
     @GetMapping("/optimistic")
     String optimistic() {
       throw new OptimisticLockingFailureException("row was updated by another transaction");
+    }
+
+    @GetMapping("/pessimistic")
+    String pessimistic() {
+      throw new CannotAcquireLockException("could not obtain lock on row");
     }
 
     @GetMapping("/boom")
@@ -303,6 +309,14 @@ class GlobalExceptionHandlerTest {
   void optimisticLockFailure_is409Conflict() throws Exception {
     mockMvc
         .perform(get("/optimistic"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CONFLICT"));
+  }
+
+  @Test
+  void pessimisticLockFailure_is409Conflict() throws Exception {
+    mockMvc
+        .perform(get("/pessimistic"))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CONFLICT"));
   }

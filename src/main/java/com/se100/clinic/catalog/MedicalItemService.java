@@ -161,6 +161,14 @@ public class MedicalItemService {
     findOrThrow(publicId).setActive(false);
   }
 
+  /** Undoes {@link #deactivateMedicalItem}; activating an already active item is not an error. */
+  @Transactional
+  public MedicalItemResponseDto activateMedicalItem(UUID publicId) {
+    MedicalItem medicalItem = findOrThrow(publicId);
+    medicalItem.setActive(true);
+    return MedicalItemResponseDto.from(medicalItem);
+  }
+
   private MedicalItem findOrThrow(UUID publicId) {
     return medicalItemRepository
         .findByPublicId(publicId)

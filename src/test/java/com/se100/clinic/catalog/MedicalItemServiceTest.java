@@ -246,4 +246,27 @@ class MedicalItemServiceTest {
     assertThatThrownBy(() -> service.deactivateMedicalItem(publicId))
         .isInstanceOf(NotFoundException.class);
   }
+
+  @Test
+  void activate_shouldRestoreItem_andStaySilentWhenRepeated() {
+    MedicalItem item = itemOf(1L, "Item");
+    item.setActive(false);
+    when(medicalItemRepository.findByPublicId(item.getPublicId())).thenReturn(Optional.of(item));
+
+    MedicalItemResponseDto first = service.activateMedicalItem(item.getPublicId());
+    MedicalItemResponseDto second = service.activateMedicalItem(item.getPublicId());
+
+    assertThat(item.isActive()).isTrue();
+    assertThat(first.active()).isTrue();
+    assertThat(second.active()).isTrue();
+  }
+
+  @Test
+  void activate_shouldThrowNotFound_whenItemDoesNotExist() {
+    UUID publicId = UUID.randomUUID();
+    when(medicalItemRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.activateMedicalItem(publicId))
+        .isInstanceOf(NotFoundException.class);
+  }
 }
