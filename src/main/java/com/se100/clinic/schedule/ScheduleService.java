@@ -1,6 +1,7 @@
 package com.se100.clinic.schedule;
 
 import com.se100.clinic.appointment.AppointmentSchedulingService;
+import com.se100.clinic.appointment.AppointmentSchedulingService.DoctorQueueItem;
 import com.se100.clinic.doctor.DoctorSchedulingService;
 import com.se100.clinic.facility.FacilitySchedulingService;
 import com.se100.clinic.facility.FacilitySchedulingService.RoomAssignment;
@@ -137,6 +138,17 @@ public class ScheduleService {
   @Transactional(readOnly = true)
   public ScheduleResponse get(UUID publicId) {
     return toResponse(requireSchedule(publicId));
+  }
+
+  @Transactional(readOnly = true)
+  public DoctorQueueResponse doctorQueue(UUID publicId, Long doctorId) {
+    DoctorSchedule schedule = requireSchedule(publicId);
+    if (!schedule.getDoctorId().equals(doctorId)) {
+      throw new NotFoundException(
+          ScheduleErrorCode.SCHEDULE_NOT_ASSIGNED, "Không tìm thấy ca được phân công");
+    }
+    return new DoctorQueueResponse(
+        toResponse(schedule), appointments.doctorQueue(schedule.getId()));
   }
 
   @Transactional(readOnly = true)
@@ -340,4 +352,6 @@ public class ScheduleService {
           ScheduleErrorCode.INVALID_DATE_RANGE, "fromDate phải trước hoặc bằng toDate");
     }
   }
+
+  public record DoctorQueueResponse(ScheduleResponse schedule, List<DoctorQueueItem> patients) {}
 }

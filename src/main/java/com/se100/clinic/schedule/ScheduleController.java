@@ -9,6 +9,7 @@ import com.se100.clinic.schedule.ScheduleDtos.SaveScheduleRequest;
 import com.se100.clinic.schedule.ScheduleDtos.ScheduleResponse;
 import com.se100.clinic.schedule.ScheduleDtos.ShiftResponse;
 import com.se100.clinic.schedule.ScheduleDtos.SlotResponse;
+import com.se100.clinic.schedule.ScheduleService.DoctorQueueResponse;
 import com.se100.clinic.schedule.enums.ScheduleStatus;
 import com.se100.clinic.shared.PageParams;
 import com.se100.clinic.shared.annotation.AdminOnly;
@@ -88,21 +89,17 @@ class ScheduleController {
       @RequestParam(required = false) LocalDate fromDate,
       @RequestParam(required = false) LocalDate toDate,
       @ParameterObject PageParams pageParams) {
-    Long userId =
-        users
-            .userIdForPrincipal(authentication.getName())
-            .orElseThrow(
-                () -> new BusinessException(ScheduleErrorCode.AUTH_REQUIRED, "Cần đăng nhập"));
-    Long doctorId =
-        doctors
-            .doctorIdForUser(userId)
-            .orElseThrow(
-                () ->
-                    new BusinessException(
-                        ScheduleErrorCode.DOCTOR_PROFILE_NOT_FOUND,
-                        "Tài khoản chưa liên kết với hồ sơ bác sĩ"));
+    Long doctorId = currentDoctorId(authentication);
     return ApiResult.of(
         service.list(doctorId, clinicId, null, fromDate, toDate, null, servicePage(pageParams)));
+  }
+
+  @GetMapping("/my/{publicId}/patients")
+  @PreAuthorize("hasRole('DOCTOR')")
+  @Operation(summary = "Bác sĩ xem bệnh nhân trong ca theo thứ tự tiếp nhận")
+  ApiResult<DoctorQueueResponse> myPatients(
+      Authentication authentication, @PathVariable UUID publicId) {
+    return ApiResult.of(service.doctorQueue(publicId, currentDoctorId(authentication)));
   }
 
   @GetMapping("/availability")
@@ -169,5 +166,20 @@ class ScheduleController {
 
   private static Pageable servicePage(PageParams params) {
     return params.toPageable(ScheduleService.SORTABLE_FIELDS, ScheduleService.DEFAULT_SORT);
+  }
+
+  private Long currentDoctorId(Authentication authentication) {
+    Long userId =
+        users
+            .userIdForPrincipal(authentication.getName())
+            .orElseThrow(
+                () -> new BusinessException(ScheduleErrorCode.AUTH_REQUIRED, "Cần đăng nhập"));
+    return doctors
+        .doctorIdForUser(userId)
+        .orElseThrow(
+            () ->
+                new BusinessException(
+                    ScheduleErrorCode.DOCTOR_PROFILE_NOT_FOUND,
+                    "Tài khoản chưa liên kết với hồ sơ bác sĩ"));
   }
 }

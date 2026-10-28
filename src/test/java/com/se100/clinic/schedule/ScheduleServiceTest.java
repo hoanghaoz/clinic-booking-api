@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.se100.clinic.appointment.AppointmentSchedulingService;
@@ -16,6 +17,7 @@ import com.se100.clinic.schedule.ScheduleDtos.SaveScheduleRequest;
 import com.se100.clinic.schedule.enums.ScheduleStatus;
 import com.se100.clinic.shared.error.BusinessException;
 import com.se100.clinic.shared.error.ConflictException;
+import com.se100.clinic.shared.error.NotFoundException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -130,5 +132,20 @@ class ScheduleServiceTest {
         .extracting(error -> ((ConflictException) error).getErrorCode())
         .isEqualTo(ScheduleErrorCode.SCHEDULE_HAS_APPOINTMENTS);
     verify(schedules, never()).flush();
+  }
+
+  @Test
+  void doctorCannotReadAnotherDoctorsPatientQueue() {
+    DoctorSchedule existing = new DoctorSchedule();
+    existing.setId(99L);
+    existing.setPublicId(UUID.randomUUID());
+    existing.setDoctorId(11L);
+    when(schedules.findByPublicId(existing.getPublicId())).thenReturn(Optional.of(existing));
+
+    assertThatThrownBy(() -> service.doctorQueue(existing.getPublicId(), 22L))
+        .isInstanceOf(NotFoundException.class)
+        .extracting(error -> ((NotFoundException) error).getErrorCode())
+        .isEqualTo(ScheduleErrorCode.SCHEDULE_NOT_ASSIGNED);
+    verifyNoInteractions(appointments);
   }
 }

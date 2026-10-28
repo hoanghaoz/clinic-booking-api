@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 public enum ScheduleErrorCode implements ErrorCode {
   SHIFT_NOT_FOUND(HttpStatus.NOT_FOUND),
   SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND),
+  SCHEDULE_NOT_ASSIGNED(HttpStatus.NOT_FOUND),
   SLOT_NOT_FOUND(HttpStatus.NOT_FOUND),
   DOCTOR_NOT_FOUND(HttpStatus.NOT_FOUND),
   DOCTOR_PROFILE_NOT_FOUND(HttpStatus.FORBIDDEN),
