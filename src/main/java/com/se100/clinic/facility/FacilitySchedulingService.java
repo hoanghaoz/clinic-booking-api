@@ -3,6 +3,7 @@ package com.se100.clinic.facility;
 import com.se100.clinic.facility.enums.FacilityStatus;
 import jakarta.persistence.EntityManager;
 import java.util.Optional;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,14 @@ public class FacilitySchedulingService {
             clinic.getId(),
             room.getStatus() == FacilityStatus.OPENING,
             clinic.getStatus() == FacilityStatus.OPENING));
+  }
+
+  @Transactional(readOnly = true)
+  public List<Long> roomIds(Long clinicId) {
+    return entityManager
+        .createQuery("select r.id from Room r where r.clinic.id = :clinicId", Long.class)
+        .setParameter("clinicId", clinicId)
+        .getResultList();
   }
 
   public record RoomAssignment(Long clinicId, boolean roomOpen, boolean clinicOpen) {}
