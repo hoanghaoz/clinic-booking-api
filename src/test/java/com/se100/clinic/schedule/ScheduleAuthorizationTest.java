@@ -54,6 +54,7 @@ class ScheduleAuthorizationTest {
                     LocalDate.of(2026, 11, 3),
                     LocalDate.of(2026, 11, 3),
                     20,
+                    null,
                     null))
         .isInstanceOf(AccessDeniedException.class);
   }

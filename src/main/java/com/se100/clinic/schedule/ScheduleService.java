@@ -159,6 +159,7 @@ public class ScheduleService {
       LocalDate fromDate,
       LocalDate toDate,
       ScheduleStatus status,
+      Long shiftId,
       Pageable pageable) {
     validateDateRange(fromDate, toDate);
     List<Long> roomIds = clinicId == null ? null : facilities.roomIds(clinicId);
@@ -175,6 +176,7 @@ public class ScheduleService {
             filters.add(cb.greaterThanOrEqualTo(root.get("workDate"), fromDate));
           if (toDate != null) filters.add(cb.lessThanOrEqualTo(root.get("workDate"), toDate));
           if (status != null) filters.add(cb.equal(root.get("status"), status));
+          if (shiftId != null) filters.add(cb.equal(root.get("shift").get("id"), shiftId));
           return cb.and(filters.toArray(Predicate[]::new));
         };
     return scheduleRepository.findAll(spec, pageable).map(this::toResponse);

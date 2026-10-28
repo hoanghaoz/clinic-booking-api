@@ -74,10 +74,11 @@ class ScheduleController {
       @RequestParam(required = false) LocalDate fromDate,
       @RequestParam(required = false) LocalDate toDate,
       @RequestParam(required = false) ScheduleStatus status,
+      @RequestParam(required = false) Long shiftId,
       @ParameterObject PageParams pageParams) {
     Pageable pageable = servicePage(pageParams);
     return ApiResult.of(
-        service.list(doctorId, clinicId, specialtyId, fromDate, toDate, status, pageable));
+        service.list(doctorId, clinicId, specialtyId, fromDate, toDate, status, shiftId, pageable));
   }
 
   @GetMapping("/my")
@@ -88,10 +89,12 @@ class ScheduleController {
       @RequestParam(required = false) Long clinicId,
       @RequestParam(required = false) LocalDate fromDate,
       @RequestParam(required = false) LocalDate toDate,
+      @RequestParam(required = false) Long shiftId,
       @ParameterObject PageParams pageParams) {
     Long doctorId = currentDoctorId(authentication);
     return ApiResult.of(
-        service.list(doctorId, clinicId, null, fromDate, toDate, null, servicePage(pageParams)));
+        service.list(
+            doctorId, clinicId, null, fromDate, toDate, null, shiftId, servicePage(pageParams)));
   }
 
   @GetMapping("/my/{publicId}/patients")
@@ -112,6 +115,7 @@ class ScheduleController {
       @RequestParam LocalDate fromDate,
       @RequestParam LocalDate toDate,
       @RequestParam(defaultValue = "20") int durationMinutes,
+      @RequestParam(required = false) Long shiftId,
       @ParameterObject PageParams pageParams) {
     return ApiResult.of(
         availability.find(
@@ -121,6 +125,7 @@ class ScheduleController {
             fromDate,
             toDate,
             durationMinutes,
+            shiftId,
             servicePage(pageParams)));
   }
 

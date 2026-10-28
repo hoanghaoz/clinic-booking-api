@@ -44,6 +44,7 @@ public class ScheduleAvailabilityService {
       LocalDate fromDate,
       LocalDate toDate,
       int durationMinutes,
+      Long shiftId,
       Pageable pageable) {
     if (durationMinutes != 20 && durationMinutes != 30) {
       throw new BusinessException(
@@ -56,7 +57,14 @@ public class ScheduleAvailabilityService {
     }
     Page<ScheduleDtos.ScheduleResponse> matches =
         schedules.list(
-            doctorId, clinicId, specialtyId, fromDate, toDate, ScheduleStatus.OPEN, pageable);
+            doctorId,
+            clinicId,
+            specialtyId,
+            fromDate,
+            toDate,
+            ScheduleStatus.OPEN,
+            shiftId,
+            pageable);
     return matches.map(
         response -> {
           DoctorSchedule schedule =

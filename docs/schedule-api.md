@@ -22,17 +22,17 @@ Gốc: `/api/v1/doctor-schedules`.
 |---|---|---|---|
 | GET | `/shifts` | Người dùng đăng nhập trong `prod` | Ba ca cố định |
 | POST | `/` | `ADMIN` | Tạo phân công và sinh slot |
-| GET | `/` | `ADMIN` | Lọc theo `doctorId`, `clinicId`, `specialtyId`, `fromDate`, `toDate`, `status`; phân trang |
+| GET | `/` | `ADMIN` | Lọc theo `doctorId`, `clinicId`, `specialtyId`, `fromDate`, `toDate`, `status`, `shiftId`; phân trang |
 | GET | `/{publicId}` | `ADMIN` | Chi tiết phân công |
 | PUT | `/{publicId}` | `ADMIN` | Sửa phân công khi chưa từng có lịch hẹn |
 | PATCH | `/{publicId}/status` | `ADMIN` | Đổi `OPEN`, `CLOSED`, `CANCELLED` |
 | GET | `/{publicId}/slots` | `ADMIN` | Slot và cờ `occupied` |
 | PATCH | `/{publicId}/slots/{slotId}/status` | `ADMIN` | Chặn hoặc mở slot chưa có lịch hẹn |
 | GET | `/availability` | Người dùng đăng nhập | Các khoảng còn đặt được |
-| GET | `/my` | `DOCTOR` | Ca của bác sĩ đang đăng nhập |
+| GET | `/my` | `DOCTOR` | Ca của bác sĩ đang đăng nhập, có thể lọc theo `shiftId` |
 | GET | `/my/{publicId}/patients` | `DOCTOR`, đúng ca được phân công | Bệnh nhân của ca theo thứ tự tiếp nhận |
 
-`GET /` và `GET /my` dùng `page` bắt đầu từ 1, `size` tối đa 100, `sort` trong `workDate,startAt,status,createdAt`; mặc định theo ngày và giờ bắt đầu. `GET /availability` cũng phân trang theo **ca**, mỗi ca có mảng `windows` và cờ `full`. Bắt buộc `fromDate`, `toDate` (ISO `yyyy-MM-dd`); `durationMinutes` chỉ nhận `20` hoặc `30`, mặc định `20`. Bộ lọc bác sĩ, cơ sở, chuyên khoa là tùy chọn.
+`GET /` và `GET /my` dùng `page` bắt đầu từ 1, `size` tối đa 100, `sort` trong `workDate,startAt,status,createdAt`; mặc định theo ngày và giờ bắt đầu. `GET /availability` cũng phân trang theo **ca**, mỗi ca có mảng `windows` và cờ `full`. Bắt buộc `fromDate`, `toDate` (ISO `yyyy-MM-dd`); `durationMinutes` chỉ nhận `20` hoặc `30`, mặc định `20`. Bộ lọc bác sĩ, cơ sở, chuyên khoa và `shiftId` là tùy chọn.
 
 Ví dụ tạo ca:
 
