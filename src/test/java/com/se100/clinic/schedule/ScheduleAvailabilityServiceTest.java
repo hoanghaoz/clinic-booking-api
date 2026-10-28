@@ -11,6 +11,8 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class ScheduleAvailabilityServiceTest {
+  private static final Instant BEFORE_SHIFT = Instant.parse("2026-11-03T00:00:00Z");
+
   private static DoctorSchedule schedule(int general, int specialist) {
     DoctorSchedule schedule = new DoctorSchedule();
     schedule.setDoctorId(1L);
@@ -40,7 +42,8 @@ class ScheduleAvailabilityServiceTest {
     slots.get(2).setStatus(SlotStatus.BLOCKED);
     var reserved = new ReservationSnapshot(Set.of(6L), 0, 0);
 
-    var windows = ScheduleAvailabilityService.windows(schedule(12, 8), 4L, slots, reserved, 20);
+    var windows =
+        ScheduleAvailabilityService.windows(schedule(12, 8), 4L, slots, reserved, 20, BEFORE_SHIFT);
 
     assertThat(windows).hasSize(2);
     assertThat(windows.get(0).startAt()).isEqualTo(slots.get(0).getStartAt());
@@ -54,7 +57,12 @@ class ScheduleAvailabilityServiceTest {
 
     assertThat(
             ScheduleAvailabilityService.windows(
-                schedule(12, 8), 4L, slots, new ReservationSnapshot(Set.of(), 0, 0), 30))
+                schedule(12, 8),
+                4L,
+                slots,
+                new ReservationSnapshot(Set.of(), 0, 0),
+                30,
+                BEFORE_SHIFT))
         .isEmpty();
   }
 
@@ -62,7 +70,25 @@ class ScheduleAvailabilityServiceTest {
   void configuredPerTypeLimitCanMakeShiftFullBeforeAllSlotsAreUsed() {
     assertThat(
             ScheduleAvailabilityService.windows(
-                schedule(1, 8), 4L, slots(24), new ReservationSnapshot(Set.of(), 1, 0), 20))
+                schedule(1, 8),
+                4L,
+                slots(24),
+                new ReservationSnapshot(Set.of(), 1, 0),
+                20,
+                BEFORE_SHIFT))
         .isEmpty();
+  }
+
+  @Test
+  void windowsCannotStartInThePast() {
+    List<DoctorScheduleSlot> slots = slots(4);
+    Instant now = slots.get(1).getStartAt().plusSeconds(1);
+
+    var windows =
+        ScheduleAvailabilityService.windows(
+            schedule(12, 8), 4L, slots, new ReservationSnapshot(Set.of(), 0, 0), 20, now);
+
+    assertThat(windows).hasSize(1);
+    assertThat(windows.getFirst().startAt()).isEqualTo(slots.get(2).getStartAt());
   }
 }

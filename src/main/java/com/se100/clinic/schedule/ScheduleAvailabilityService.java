@@ -55,6 +55,7 @@ public class ScheduleAvailabilityService {
       throw new BusinessException(
           ScheduleErrorCode.INVALID_DATE_RANGE, "Cần nhập fromDate và toDate");
     }
+    Instant now = Instant.now();
     Page<ScheduleDtos.ScheduleResponse> matches =
         schedules.list(
             doctorId,
@@ -64,6 +65,7 @@ public class ScheduleAvailabilityService {
             toDate,
             ScheduleStatus.OPEN,
             shiftId,
+            now,
             pageable);
     return matches.map(
         response -> {
@@ -73,7 +75,7 @@ public class ScheduleAvailabilityService {
           List<DoctorScheduleSlot> slots =
               slotRepository.findAllByScheduleIdOrderByStartAt(schedule.getId());
           List<AvailableWindow> windows =
-              windows(schedule, response.clinicId(), slots, reserved, durationMinutes);
+              windows(schedule, response.clinicId(), slots, reserved, durationMinutes, now);
           return new AvailableSchedule(response, windows, windows.isEmpty());
         });
   }
@@ -83,7 +85,8 @@ public class ScheduleAvailabilityService {
       Long clinicId,
       List<DoctorScheduleSlot> slots,
       ReservationSnapshot reserved,
-      int durationMinutes) {
+      int durationMinutes,
+      Instant now) {
     if ((durationMinutes == 20 && reserved.generalVisits() >= schedule.getGeneralCapacity())
         || (durationMinutes == 30
             && reserved.specialistVisits() >= schedule.getSpecialistCapacity())) {
@@ -93,6 +96,9 @@ public class ScheduleAvailabilityService {
     Set<Long> occupied = reserved.occupiedSlotIds();
     List<AvailableWindow> result = new ArrayList<>();
     for (int start = 0; start + required <= slots.size(); start++) {
+      if (slots.get(start).getStartAt().isBefore(now)) {
+        continue;
+      }
       boolean free = true;
       Instant end = slots.get(start).getStartAt();
       for (int offset = 0; offset < required; offset++) {

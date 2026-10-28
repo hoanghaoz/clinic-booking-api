@@ -180,6 +180,20 @@ public class ScheduleService {
       ScheduleStatus status,
       Long shiftId,
       Pageable pageable) {
+    return list(doctorId, clinicId, specialtyId, fromDate, toDate, status, shiftId, null, pageable);
+  }
+
+  @Transactional(readOnly = true)
+  public Page<ScheduleResponse> list(
+      Long doctorId,
+      Long clinicId,
+      Long specialtyId,
+      LocalDate fromDate,
+      LocalDate toDate,
+      ScheduleStatus status,
+      Long shiftId,
+      Instant endingAfter,
+      Pageable pageable) {
     validateDateRange(fromDate, toDate);
     List<Long> roomIds = clinicId == null ? null : facilities.roomIds(clinicId);
     if (roomIds != null && roomIds.isEmpty()) {
@@ -196,6 +210,7 @@ public class ScheduleService {
           if (toDate != null) filters.add(cb.lessThanOrEqualTo(root.get("workDate"), toDate));
           if (status != null) filters.add(cb.equal(root.get("status"), status));
           if (shiftId != null) filters.add(cb.equal(root.get("shift").get("id"), shiftId));
+          if (endingAfter != null) filters.add(cb.greaterThan(root.get("endAt"), endingAfter));
           return cb.and(filters.toArray(Predicate[]::new));
         };
     return scheduleRepository.findAll(spec, pageable).map(this::toResponse);

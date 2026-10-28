@@ -52,7 +52,7 @@ Ví dụ tạo ca:
 
 Thành công trả `201`, header `Location: /api/v1/doctor-schedules/{publicId}` và `{"data":{...}}`. Trước khi lưu, server xác thực bác sĩ còn làm việc và thuộc chuyên khoa, phòng thuộc cơ sở và cả hai còn mở. Hai phân công chưa hủy không được trùng thời gian của bác sĩ **hoặc** phòng. PostgreSQL giữ thêm exclusion constraint để tránh hai request đồng thời vượt qua bước kiểm tra ứng dụng.
 
-`GET /availability` trừ các slot còn giữ chỗ (`appointment_slots.released_at IS NULL`), các slot `BLOCKED`, và giới hạn lượt theo loại. Đây là ảnh chụp tại thời điểm đọc; module đặt lịch phải kiểm tra và giữ slot trong một giao dịch riêng trước khi xác nhận. `CLOSED` không xuất hiện trong lịch khả dụng. `CANCELLED` chỉ được áp dụng khi ca chưa có lịch hẹn.
+`GET /availability` trừ các slot còn giữ chỗ (`appointment_slots.released_at IS NULL`), các slot `BLOCKED`, giờ đã qua và giới hạn lượt theo loại. Ca đã kết thúc không xuất hiện. Đây là ảnh chụp tại thời điểm đọc; module đặt lịch phải kiểm tra và giữ slot trong một giao dịch riêng trước khi xác nhận. `CLOSED` không xuất hiện trong lịch khả dụng. `CANCELLED` chỉ được áp dụng khi ca chưa có lịch hẹn.
 
 `GET /my/{publicId}/patients` chỉ trả ca thuộc bác sĩ đang đăng nhập. Mỗi dòng gồm mã đặt lịch, bệnh nhân, tên gói hoặc dịch vụ, trạng thái lịch hẹn, giờ hẹn và `receivedAt` nếu đã tiếp nhận. Bệnh nhân đã tiếp nhận đứng trước theo `receivedAt`, các trường hợp chưa tiếp nhận đứng sau theo giờ hẹn. Các trạng thái `HELD`, `CANCELLED`, `EXPIRED` không thuộc danh sách khám.
 
