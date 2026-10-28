@@ -71,6 +71,12 @@ class DoctorSchedule extends BaseAuditEntity {
   @Column(name = "end_at", nullable = false)
   private Instant endAt;
 
+  @Column(name = "general_capacity", nullable = false)
+  private Integer generalCapacity;
+
+  @Column(name = "specialist_capacity", nullable = false)
+  private Integer specialistCapacity;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false)
   @ColumnDefault("'OPEN'")

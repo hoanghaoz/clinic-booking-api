@@ -109,6 +109,8 @@ class ScheduleMappingTest {
             "work_date",
             "start_at",
             "end_at",
+            "general_capacity",
+            "specialist_capacity",
             "status",
             "created_at",
             "updated_at");
