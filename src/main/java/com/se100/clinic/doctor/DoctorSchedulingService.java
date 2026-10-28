@@ -2,6 +2,7 @@ package com.se100.clinic.doctor;
 
 import com.se100.clinic.employee.enums.EmployeeStatus;
 import jakarta.persistence.EntityManager;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,5 +28,14 @@ public class DoctorSchedulingService {
   public boolean hasSpecialty(Long doctorId, Long specialtyId) {
     return entityManager.find(DoctorSpeciality.class, new DoctorSpecialityId(doctorId, specialtyId))
         != null;
+  }
+
+  @Transactional(readOnly = true)
+  public Optional<Long> doctorIdForUser(Long userId) {
+    return entityManager
+        .createQuery("select d.id from Doctor d where d.userId = :userId", Long.class)
+        .setParameter("userId", userId)
+        .getResultStream()
+        .findFirst();
   }
 }
