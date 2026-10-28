@@ -9,6 +9,7 @@ import com.se100.clinic.schedule.ScheduleDtos.ScheduleResponse;
 import com.se100.clinic.schedule.ScheduleDtos.ShiftResponse;
 import com.se100.clinic.schedule.ScheduleDtos.SlotResponse;
 import com.se100.clinic.schedule.enums.ScheduleStatus;
+import com.se100.clinic.schedule.enums.SlotStatus;
 import com.se100.clinic.shared.error.BusinessException;
 import com.se100.clinic.shared.error.ConflictException;
 import com.se100.clinic.shared.error.DbErrors;
@@ -175,6 +176,22 @@ public class ScheduleService {
     return slotRepository.findAllByScheduleIdOrderByStartAt(schedule.getId()).stream()
         .map(slot -> SlotResponse.from(slot, occupied.contains(slot.getId())))
         .toList();
+  }
+
+  @Transactional
+  public SlotResponse changeSlotStatus(UUID publicId, Long slotId, SlotStatus status) {
+    DoctorSchedule schedule = requireSchedule(publicId);
+    DoctorScheduleSlot slot =
+        slotRepository
+            .findByIdAndScheduleId(slotId, schedule.getId())
+            .orElseThrow(
+                () -> new NotFoundException(ScheduleErrorCode.SLOT_NOT_FOUND, "Không tìm thấy ô giờ"));
+    boolean occupied = appointments.reservations(schedule.getId()).occupiedSlotIds().contains(slotId);
+    if (occupied && status == SlotStatus.BLOCKED) {
+      throw new ConflictException(ScheduleErrorCode.SLOT_OCCUPIED, "Ô giờ đã có lịch hẹn");
+    }
+    slot.setStatus(status);
+    return SlotResponse.from(slot, occupied);
   }
 
   DoctorSchedule requireSchedule(UUID publicId) {
