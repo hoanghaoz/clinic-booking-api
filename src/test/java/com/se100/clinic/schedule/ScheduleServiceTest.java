@@ -10,9 +10,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.se100.clinic.appointment.AppointmentSchedulingService;
+import com.se100.clinic.appointment.AppointmentSchedulingService.ReservationSnapshot;
 import com.se100.clinic.doctor.DoctorSchedulingService;
 import com.se100.clinic.facility.FacilitySchedulingService;
 import com.se100.clinic.facility.FacilitySchedulingService.RoomAssignment;
+import com.se100.clinic.schedule.ScheduleDtos.ChangeCapacityRequest;
 import com.se100.clinic.schedule.ScheduleDtos.SaveScheduleRequest;
 import com.se100.clinic.schedule.enums.ScheduleStatus;
 import com.se100.clinic.shared.error.BusinessException;
@@ -23,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -147,5 +150,52 @@ class ScheduleServiceTest {
         .extracting(error -> ((NotFoundException) error).getErrorCode())
         .isEqualTo(ScheduleErrorCode.SCHEDULE_NOT_ASSIGNED);
     verifyNoInteractions(appointments);
+  }
+
+  @Test
+  void capacityCannotDropBelowActiveBookedVisits() {
+    DoctorSchedule existing = new DoctorSchedule();
+    existing.setId(99L);
+    existing.setPublicId(UUID.randomUUID());
+    existing.setShift(morning());
+    existing.setGeneralCapacity(12);
+    existing.setSpecialistCapacity(8);
+    when(schedules.findByPublicId(existing.getPublicId())).thenReturn(Optional.of(existing));
+    when(appointments.reservations(99L))
+        .thenReturn(new ReservationSnapshot(Set.of(1L, 2L, 3L, 4L), 2, 0));
+
+    assertThatThrownBy(
+            () -> service.changeCapacity(existing.getPublicId(), new ChangeCapacityRequest(1, 8)))
+        .isInstanceOf(ConflictException.class)
+        .extracting(error -> ((ConflictException) error).getErrorCode())
+        .isEqualTo(ScheduleErrorCode.CAPACITY_BELOW_BOOKED);
+    assertThat(existing.getGeneralCapacity()).isEqualTo(12);
+    verify(schedules, never()).flush();
+  }
+
+  @Test
+  void capacityCanChangeWithoutDiscardingExistingAppointments() {
+    DoctorSchedule existing = new DoctorSchedule();
+    existing.setId(99L);
+    existing.setPublicId(UUID.randomUUID());
+    existing.setDoctorId(11L);
+    existing.setSpecialtyId(12L);
+    existing.setRoomId(14L);
+    existing.setShift(morning());
+    existing.setWorkDate(LocalDate.of(2026, 11, 3));
+    existing.setStartAt(Instant.parse("2026-11-03T01:00:00Z"));
+    existing.setEndAt(Instant.parse("2026-11-03T05:00:00Z"));
+    when(schedules.findByPublicId(existing.getPublicId())).thenReturn(Optional.of(existing));
+    when(appointments.reservations(99L))
+        .thenReturn(new ReservationSnapshot(Set.of(1L, 2L, 3L, 4L), 2, 0));
+    when(facilities.roomAssignment(14L))
+        .thenReturn(Optional.of(new RoomAssignment(13L, true, true)));
+
+    var response = service.changeCapacity(existing.getPublicId(), new ChangeCapacityRequest(3, 2));
+
+    assertThat(response.generalCapacity()).isEqualTo(3);
+    assertThat(response.specialistCapacity()).isEqualTo(2);
+    verify(schedules).flush();
+    verify(slots, never()).deleteForSchedule(any());
   }
 }

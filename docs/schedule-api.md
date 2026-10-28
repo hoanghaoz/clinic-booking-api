@@ -26,6 +26,7 @@ Gốc: `/api/v1/doctor-schedules`.
 | GET | `/{publicId}` | `ADMIN` | Chi tiết phân công |
 | PUT | `/{publicId}` | `ADMIN` | Sửa phân công khi chưa từng có lịch hẹn |
 | PATCH | `/{publicId}/status` | `ADMIN` | Đổi `OPEN`, `CLOSED`, `CANCELLED` |
+| PATCH | `/{publicId}/capacity` | `ADMIN` | Chỉnh sức chứa; không thể giảm dưới số lượt đang giữ chỗ |
 | GET | `/{publicId}/slots` | `ADMIN` | Slot và cờ `occupied` |
 | PATCH | `/{publicId}/slots/{slotId}/status` | `ADMIN` | Chặn hoặc mở slot chưa có lịch hẹn |
 | GET | `/availability` | Người dùng đăng nhập | Các khoảng còn đặt được |
@@ -64,5 +65,6 @@ Thành công trả `201`, header `Location: /api/v1/doctor-schedules/{publicId}`
 | `SCHEDULE_NOT_ASSIGNED` | 404 | Bác sĩ yêu cầu ca không thuộc mình |
 | `DOCTOR_NOT_WORKING`, `DOCTOR_SPECIALTY_MISMATCH`, `FACILITY_NOT_OPEN`, `ROOM_CLINIC_MISMATCH` | 409 | Phân công không hợp lệ |
 | `SCHEDULE_OVERLAP`, `SCHEDULE_HAS_APPOINTMENTS`, `SLOT_OCCUPIED` | 409 | Trùng ca hoặc đã có lịch hẹn |
+| `CAPACITY_BELOW_BOOKED` | 409 | Sức chứa mới thấp hơn số lượt còn giữ chỗ |
 
 `identity` chưa cung cấp JWT trong codebase hiện tại. Method security đã bật cho các route `ADMIN` và `DOCTOR`; cấu hình `prod` yêu cầu đăng nhập. Khi module `identity` được nối vào, principal cần có role tương ứng và liên kết tới user/doctor. Dữ liệu bệnh nhân chỉ được trả qua route `/my/{publicId}/patients` sau khi kiểm tra quyền sở hữu ca.

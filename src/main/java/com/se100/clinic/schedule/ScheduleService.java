@@ -1,9 +1,11 @@
 package com.se100.clinic.schedule;
 
 import com.se100.clinic.appointment.AppointmentSchedulingService;
+import com.se100.clinic.appointment.AppointmentSchedulingService.ReservationSnapshot;
 import com.se100.clinic.doctor.DoctorSchedulingService;
 import com.se100.clinic.facility.FacilitySchedulingService;
 import com.se100.clinic.facility.FacilitySchedulingService.RoomAssignment;
+import com.se100.clinic.schedule.ScheduleDtos.ChangeCapacityRequest;
 import com.se100.clinic.schedule.ScheduleDtos.DoctorQueueResponse;
 import com.se100.clinic.schedule.ScheduleDtos.SaveScheduleRequest;
 import com.se100.clinic.schedule.ScheduleDtos.ScheduleResponse;
@@ -135,6 +137,23 @@ public class ScheduleService {
     return toResponse(schedule);
   }
 
+  @Transactional
+  public ScheduleResponse changeCapacity(UUID publicId, ChangeCapacityRequest request) {
+    DoctorSchedule schedule = requireSchedule(publicId);
+    validateCapacity(schedule.getShift(), request.generalCapacity(), request.specialistCapacity());
+    ReservationSnapshot reserved = appointments.reservations(schedule.getId());
+    if (request.generalCapacity() < reserved.generalVisits()
+        || request.specialistCapacity() < reserved.specialistVisits()) {
+      throw new ConflictException(
+          ScheduleErrorCode.CAPACITY_BELOW_BOOKED,
+          "Giới hạn mới thấp hơn số lượt đang giữ chỗ trong ca");
+    }
+    schedule.setGeneralCapacity(request.generalCapacity());
+    schedule.setSpecialistCapacity(request.specialistCapacity());
+    scheduleRepository.flush();
+    return toResponse(schedule);
+  }
+
   @Transactional(readOnly = true)
   public ScheduleResponse get(UUID publicId) {
     return toResponse(requireSchedule(publicId));
@@ -230,11 +249,7 @@ public class ScheduleService {
     if (!isFixedShift(shift)) {
       throw new BusinessException(ScheduleErrorCode.INVALID_SHIFT, "Chỉ hỗ trợ ba ca cố định");
     }
-    int minutes = (int) Duration.between(start, end).toMinutes();
-    if (request.generalCapacity() > minutes / 20 || request.specialistCapacity() > minutes / 30) {
-      throw new BusinessException(
-          ScheduleErrorCode.INVALID_CAPACITY, "Giới hạn lượt vượt thời lượng ca");
-    }
+    validateCapacity(shift, request.generalCapacity(), request.specialistCapacity());
     if (!doctors.exists(request.doctorId())) {
       throw new NotFoundException(ScheduleErrorCode.DOCTOR_NOT_FOUND, "Không tìm thấy bác sĩ");
     }
@@ -278,6 +293,17 @@ public class ScheduleService {
               && shift.getEndTime().equals(LocalTime.of(20, 0));
       default -> false;
     };
+  }
+
+  private static void validateCapacity(Shift shift, int generalCapacity, int specialistCapacity) {
+    if (!isFixedShift(shift)) {
+      throw new BusinessException(ScheduleErrorCode.INVALID_SHIFT, "Chỉ hỗ trợ ba ca cố định");
+    }
+    int minutes = (int) Duration.between(shift.getStartTime(), shift.getEndTime()).toMinutes();
+    if (generalCapacity > minutes / 20 || specialistCapacity > minutes / 30) {
+      throw new BusinessException(
+          ScheduleErrorCode.INVALID_CAPACITY, "Giới hạn lượt vượt thời lượng ca");
+    }
   }
 
   private void ensureNoOverlap(

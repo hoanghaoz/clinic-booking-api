@@ -3,6 +3,7 @@ package com.se100.clinic.schedule;
 import com.se100.clinic.auth.AuthenticatedUserService;
 import com.se100.clinic.doctor.DoctorSchedulingService;
 import com.se100.clinic.schedule.ScheduleDtos.AvailableSchedule;
+import com.se100.clinic.schedule.ScheduleDtos.ChangeCapacityRequest;
 import com.se100.clinic.schedule.ScheduleDtos.ChangeScheduleStatusRequest;
 import com.se100.clinic.schedule.ScheduleDtos.ChangeSlotStatusRequest;
 import com.se100.clinic.schedule.ScheduleDtos.DoctorQueueResponse;
@@ -150,6 +151,14 @@ class ScheduleController {
   ApiResult<ScheduleResponse> changeStatus(
       @PathVariable UUID publicId, @Valid @RequestBody ChangeScheduleStatusRequest request) {
     return ApiResult.of(service.changeStatus(publicId, request.status()));
+  }
+
+  @PatchMapping("/{publicId}/capacity")
+  @AdminOnly
+  @Operation(summary = "Chỉnh sức chứa ca mà không thay đổi phân công hoặc lịch hẹn")
+  ApiResult<ScheduleResponse> changeCapacity(
+      @PathVariable UUID publicId, @Valid @RequestBody ChangeCapacityRequest request) {
+    return ApiResult.of(service.changeCapacity(publicId, request));
   }
 
   @GetMapping("/{publicId}/slots")

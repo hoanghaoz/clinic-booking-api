@@ -38,6 +38,9 @@ public final class ScheduleDtos {
 
   public record ChangeScheduleStatusRequest(@NotNull ScheduleStatus status) {}
 
+  public record ChangeCapacityRequest(
+      @NotNull @Positive Integer generalCapacity, @NotNull @Positive Integer specialistCapacity) {}
+
   public record ChangeSlotStatusRequest(@NotNull SlotStatus status) {}
 
   @Schema(requiredProperties = {"id", "code", "name", "startTime", "endTime"})
