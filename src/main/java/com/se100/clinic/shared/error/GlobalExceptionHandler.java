@@ -13,6 +13,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -52,6 +54,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
   /** Name of the extra ProblemDetail property holding the {@link FieldViolation} list. */
   static final String ERRORS = "errors";
+
+  @ExceptionHandler(AccessDeniedException.class)
+  public ProblemDetail handleAccessDenied(AccessDeniedException error) {
+    return problem(CommonErrorCode.FORBIDDEN, "Không có quyền truy cập", List.of());
+  }
+
+  @ExceptionHandler(AuthenticationException.class)
+  public ProblemDetail handleAuthentication(AuthenticationException error) {
+    return problem(CommonErrorCode.AUTH_REQUIRED, "Cần đăng nhập", List.of());
+  }
 
   @ExceptionHandler(BusinessException.class)
   public ProblemDetail handleBusiness(BusinessException ex) {

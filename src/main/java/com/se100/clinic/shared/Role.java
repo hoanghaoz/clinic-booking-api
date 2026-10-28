@@ -3,8 +3,8 @@ package com.se100.clinic.shared;
 /**
  * The 5 system roles, from {@code docs/de-tai.md} section 2.
  *
- * <p>Currently only referenced by the {@code SecurityConfig} skeleton. There is no account table or
- * login yet — that arrives with the {@code identity} module (see docs/setup/DECISIONS.md #5).
+ * <p>Legacy domain vocabulary. Authentication uses the persisted {@code auth.enums.UserRole}; its
+ * COMPANY role corresponds to CORPORATE here.
  */
 public enum Role {
   PATIENT,

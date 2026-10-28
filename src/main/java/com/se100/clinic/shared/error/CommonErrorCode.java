@@ -11,6 +11,8 @@ public enum CommonErrorCode implements ErrorCode {
   VALIDATION_ERROR(HttpStatus.BAD_REQUEST),
   /** 400 without field info: unreadable JSON, missing required param/header. */
   INVALID_REQUEST(HttpStatus.BAD_REQUEST),
+  AUTH_REQUIRED(HttpStatus.UNAUTHORIZED),
+  FORBIDDEN(HttpStatus.FORBIDDEN),
   NOT_FOUND(HttpStatus.NOT_FOUND),
   METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED),
   NOT_ACCEPTABLE(HttpStatus.NOT_ACCEPTABLE),

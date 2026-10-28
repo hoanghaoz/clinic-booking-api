@@ -17,6 +17,7 @@ import com.se100.clinic.shared.annotation.AdminOnly;
 import com.se100.clinic.shared.api.ApiResult;
 import com.se100.clinic.shared.error.BusinessException;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -43,6 +44,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/doctor-schedules")
 @RequiredArgsConstructor
 @Tag(name = "Lịch làm việc", description = "Ca, phân công bác sĩ và lịch khả dụng")
+@SecurityRequirement(name = "bearerAuth")
 class ScheduleController {
   private final ScheduleService service;
   private final ScheduleAvailabilityService availability;

@@ -1,11 +1,15 @@
-# Profile prod — CHƯA sẵn sàng deploy thật (xem "Quyết định còn mở" trong README: JWT,
-# mã hoá cột nhạy cảm... đều chưa làm). Tắt Swagger UI/API docs công khai để không lộ cấu
-# trúc API; mọi secret phải đọc từ biến môi trường (.env.example), KHÔNG hardcode ở đây.
+# Profile prod yêu cầu JWT_SECRET hợp lệ. Các hạng mục còn mở như mã hoá cột nhạy cảm
+# nằm trong README. Tắt Swagger UI/API docs công khai; secret đọc từ môi trường.
 springdoc:
   swagger-ui:
     enabled: false
   api-docs:
     enabled: false
+
+app:
+  security:
+    jwt:
+      enabled: true
 
 management:
   endpoint:
