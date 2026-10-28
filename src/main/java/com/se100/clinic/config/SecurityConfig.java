@@ -28,9 +28,9 @@ public class SecurityConfig {
   };
 
   /**
-   * {@code dev} and {@code test}: every endpoint is open, so the team can call the API from
-   * curl/Postman/Swagger UI and the {@code doctor} tests need no fake auth. {@code application.yml}
-   * makes {@code dev} the default profile.
+   * {@code dev} and {@code test}: the URL filter permits requests without login. Method-level
+   * guards such as {@code @AdminOnly} and {@code @PreAuthorize} still enforce roles on protected
+   * endpoints. {@code application.yml} makes {@code dev} the default profile.
    *
    * <p>TODO(identity): replace with OAuth2 Resource Server + JWT, authorizing by {@link
    * com.se100.clinic.shared.Role}.

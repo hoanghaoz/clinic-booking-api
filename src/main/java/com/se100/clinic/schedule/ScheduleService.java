@@ -202,15 +202,30 @@ public class ScheduleService {
     Specification<DoctorSchedule> spec =
         (root, query, cb) -> {
           List<Predicate> filters = new ArrayList<>();
-          if (doctorId != null) filters.add(cb.equal(root.get("doctorId"), doctorId));
-          if (roomIds != null) filters.add(root.get("roomId").in(roomIds));
-          if (specialtyId != null) filters.add(cb.equal(root.get("specialtyId"), specialtyId));
-          if (fromDate != null)
+          if (doctorId != null) {
+            filters.add(cb.equal(root.get("doctorId"), doctorId));
+          }
+          if (roomIds != null) {
+            filters.add(root.get("roomId").in(roomIds));
+          }
+          if (specialtyId != null) {
+            filters.add(cb.equal(root.get("specialtyId"), specialtyId));
+          }
+          if (fromDate != null) {
             filters.add(cb.greaterThanOrEqualTo(root.get("workDate"), fromDate));
-          if (toDate != null) filters.add(cb.lessThanOrEqualTo(root.get("workDate"), toDate));
-          if (status != null) filters.add(cb.equal(root.get("status"), status));
-          if (shiftId != null) filters.add(cb.equal(root.get("shift").get("id"), shiftId));
-          if (endingAfter != null) filters.add(cb.greaterThan(root.get("endAt"), endingAfter));
+          }
+          if (toDate != null) {
+            filters.add(cb.lessThanOrEqualTo(root.get("workDate"), toDate));
+          }
+          if (status != null) {
+            filters.add(cb.equal(root.get("status"), status));
+          }
+          if (shiftId != null) {
+            filters.add(cb.equal(root.get("shift").get("id"), shiftId));
+          }
+          if (endingAfter != null) {
+            filters.add(cb.greaterThan(root.get("endAt"), endingAfter));
+          }
           return cb.and(filters.toArray(Predicate[]::new));
         };
     return scheduleRepository.findAll(spec, pageable).map(this::toResponse);
