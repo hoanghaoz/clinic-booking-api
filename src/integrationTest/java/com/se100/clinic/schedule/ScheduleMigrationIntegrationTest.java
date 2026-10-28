@@ -4,17 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.se100.clinic.AbstractIntegrationTest;
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
+import com.se100.clinic.ScheduleTestData;
+import com.se100.clinic.shared.error.DbErrors;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** Verifies Flyway seed data and database-level overlap protection on PostgreSQL. */
 class ScheduleMigrationIntegrationTest extends AbstractIntegrationTest {
   @Autowired private JdbcTemplate jdbc;
 
@@ -30,38 +26,81 @@ class ScheduleMigrationIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void overlappingDoctorAssignmentsAreRejectedEvenAcrossDifferentShiftCodes() {
-    long doctorId = ThreadLocalRandom.current().nextLong(1_000_000_000L, 1_000_000_000_000L);
-    long roomId = doctorId + 1;
-    insert(doctorId, roomId, "MORNING", "2026-11-03T01:00:00Z", "2026-11-03T05:00:00Z");
-
+    var data = ScheduleTestData.create(jdbc);
+    data.schedule(
+        data.doctorId(),
+        data.roomId(),
+        "MORNING",
+        data.start(),
+        data.start().plusSeconds(14400),
+        "OPEN");
     assertThatThrownBy(
             () ->
-                insert(
-                    doctorId,
-                    roomId + 1,
+                data.schedule(
+                    data.doctorId(),
+                    data.secondRoomId(),
                     "AFTERNOON",
-                    "2026-11-03T04:00:00Z",
-                    "2026-11-03T08:00:00Z"))
-        .isInstanceOf(DataIntegrityViolationException.class);
+                    data.start().plusSeconds(10800),
+                    data.start().plusSeconds(25200),
+                    "OPEN"))
+        .isInstanceOf(DataIntegrityViolationException.class)
+        .hasMessageContaining("ex_doctor_schedules_doctor_overlap")
+        .satisfies(
+            error -> assertThat(DbErrors.sqlState(error)).isEqualTo(DbErrors.EXCLUSION_VIOLATION));
   }
 
-  private void insert(long doctorId, long roomId, String shiftCode, String start, String end) {
-    jdbc.update(
-        """
-        insert into doctor_schedules
-          (work_date, created_at, updated_at, doctor_id, room_id, shift_id,
-           specialty_id, start_at, end_at, public_id, status,
-           general_capacity, specialist_capacity)
-        values (?, now(), now(), ?, ?, (select id from shifts where code = ?),
-                ?, ?, ?, ?, 'OPEN', 12, 8)
-        """,
-        LocalDate.of(2026, 11, 3),
-        doctorId,
-        roomId,
-        shiftCode,
-        1L,
-        Timestamp.from(Instant.parse(start)),
-        Timestamp.from(Instant.parse(end)),
-        UUID.randomUUID());
+  @Test
+  void overlappingRoomAssignmentsAreRejectedForDifferentDoctors() {
+    var data = ScheduleTestData.create(jdbc);
+    data.schedule(
+        data.doctorId(),
+        data.roomId(),
+        "MORNING",
+        data.start(),
+        data.start().plusSeconds(14400),
+        "OPEN");
+    assertThatThrownBy(
+            () ->
+                data.schedule(
+                    data.secondDoctorId(),
+                    data.roomId(),
+                    "MORNING",
+                    data.start(),
+                    data.start().plusSeconds(14400),
+                    "OPEN"))
+        .isInstanceOf(DataIntegrityViolationException.class)
+        .hasMessageContaining("ex_doctor_schedules_room_overlap")
+        .satisfies(
+            error -> assertThat(DbErrors.sqlState(error)).isEqualTo(DbErrors.EXCLUSION_VIOLATION));
+  }
+
+  @Test
+  void adjacentAndCancelledAssignmentsDoNotConflict() {
+    var data = ScheduleTestData.create(jdbc);
+    data.schedule(
+        data.doctorId(),
+        data.roomId(),
+        "MORNING",
+        data.start(),
+        data.start().plusSeconds(14400),
+        "OPEN");
+    assertThat(
+            data.schedule(
+                data.doctorId(),
+                data.roomId(),
+                "AFTERNOON",
+                data.start().plusSeconds(14400),
+                data.start().plusSeconds(28800),
+                "OPEN"))
+        .isPositive();
+    assertThat(
+            data.schedule(
+                data.doctorId(),
+                data.roomId(),
+                "MORNING",
+                data.start(),
+                data.start().plusSeconds(14400),
+                "CANCELLED"))
+        .isPositive();
   }
 }

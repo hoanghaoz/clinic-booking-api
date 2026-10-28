@@ -127,7 +127,8 @@ class ScheduleServiceTest {
     DoctorSchedule existing = new DoctorSchedule();
     existing.setId(99L);
     existing.setPublicId(UUID.randomUUID());
-    when(schedules.findByPublicId(existing.getPublicId())).thenReturn(Optional.of(existing));
+    when(schedules.findForUpdateByPublicId(existing.getPublicId()))
+        .thenReturn(Optional.of(existing));
     when(appointments.hasAppointments(99L)).thenReturn(true);
 
     assertThatThrownBy(() -> service.update(existing.getPublicId(), request(12, 8)))
@@ -160,7 +161,8 @@ class ScheduleServiceTest {
     existing.setShift(morning());
     existing.setGeneralCapacity(12);
     existing.setSpecialistCapacity(8);
-    when(schedules.findByPublicId(existing.getPublicId())).thenReturn(Optional.of(existing));
+    when(schedules.findForUpdateByPublicId(existing.getPublicId()))
+        .thenReturn(Optional.of(existing));
     when(appointments.reservations(99L))
         .thenReturn(new ReservationSnapshot(Set.of(1L, 2L, 3L, 4L), 2, 0));
 
@@ -185,7 +187,8 @@ class ScheduleServiceTest {
     existing.setWorkDate(LocalDate.of(2026, 11, 3));
     existing.setStartAt(Instant.parse("2026-11-03T01:00:00Z"));
     existing.setEndAt(Instant.parse("2026-11-03T05:00:00Z"));
-    when(schedules.findByPublicId(existing.getPublicId())).thenReturn(Optional.of(existing));
+    when(schedules.findForUpdateByPublicId(existing.getPublicId()))
+        .thenReturn(Optional.of(existing));
     when(appointments.reservations(99L))
         .thenReturn(new ReservationSnapshot(Set.of(1L, 2L, 3L, 4L), 2, 0));
     when(facilities.roomAssignment(14L))

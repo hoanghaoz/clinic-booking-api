@@ -34,6 +34,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Admin assignment and doctor schedule reads. Booking owns reservations and patient conflicts. */
@@ -92,7 +93,7 @@ public class ScheduleService {
 
   @Transactional
   public ScheduleResponse update(UUID publicId, SaveScheduleRequest request) {
-    DoctorSchedule schedule = requireSchedule(publicId);
+    DoctorSchedule schedule = requireScheduleForUpdate(publicId);
     if (appointments.hasAppointments(schedule.getId())) {
       throw new ConflictException(
           ScheduleErrorCode.SCHEDULE_HAS_APPOINTMENTS,
@@ -115,12 +116,14 @@ public class ScheduleService {
 
   @Transactional
   public ScheduleResponse changeStatus(UUID publicId, ScheduleStatus status) {
-    DoctorSchedule schedule = requireSchedule(publicId);
+    DoctorSchedule schedule = requireScheduleForUpdate(publicId);
     if (status == ScheduleStatus.CANCELLED && appointments.hasAppointments(schedule.getId())) {
       throw new ConflictException(
           ScheduleErrorCode.SCHEDULE_HAS_APPOINTMENTS, "Không thể hủy ca đã có lịch hẹn");
     }
     if (status == ScheduleStatus.OPEN) {
+      validateResources(
+          schedule.getDoctorId(), schedule.getSpecialtyId(), schedule.getRoomId(), null);
       ensureNoOverlap(
           schedule.getDoctorId(),
           schedule.getRoomId(),
@@ -139,7 +142,7 @@ public class ScheduleService {
 
   @Transactional
   public ScheduleResponse changeCapacity(UUID publicId, ChangeCapacityRequest request) {
-    DoctorSchedule schedule = requireSchedule(publicId);
+    DoctorSchedule schedule = requireScheduleForUpdate(publicId);
     validateCapacity(schedule.getShift(), request.generalCapacity(), request.specialistCapacity());
     ReservationSnapshot reserved = appointments.reservations(schedule.getId());
     if (request.generalCapacity() < reserved.generalVisits()
@@ -195,13 +198,24 @@ public class ScheduleService {
       Instant endingAfter,
       Pageable pageable) {
     validateDateRange(fromDate, toDate);
-    List<Long> roomIds = clinicId == null ? null : facilities.roomIds(clinicId);
+    // Availability filters resources before pagination, so totals and page boundaries remain valid.
+    List<Long> workingDoctorIds = endingAfter == null ? null : doctors.workingDoctorIds();
+    List<Long> roomIds =
+        endingAfter != null
+            ? facilities.openRoomIds(clinicId)
+            : clinicId == null ? null : facilities.roomIds(clinicId);
+    if (workingDoctorIds != null && workingDoctorIds.isEmpty()) {
+      return Page.empty(pageable);
+    }
     if (roomIds != null && roomIds.isEmpty()) {
       return Page.empty(pageable);
     }
     Specification<DoctorSchedule> spec =
         (root, query, cb) -> {
           List<Predicate> filters = new ArrayList<>();
+          if (workingDoctorIds != null) {
+            filters.add(root.get("doctorId").in(workingDoctorIds));
+          }
           if (doctorId != null) {
             filters.add(cb.equal(root.get("doctorId"), doctorId));
           }
@@ -242,7 +256,7 @@ public class ScheduleService {
 
   @Transactional
   public SlotResponse changeSlotStatus(UUID publicId, Long slotId, SlotStatus status) {
-    DoctorSchedule schedule = requireSchedule(publicId);
+    DoctorSchedule schedule = requireScheduleForUpdate(publicId);
     DoctorScheduleSlot slot =
         slotRepository
             .findByIdAndScheduleId(slotId, schedule.getId())
@@ -266,6 +280,64 @@ public class ScheduleService {
             () -> new NotFoundException(ScheduleErrorCode.SCHEDULE_NOT_FOUND, "Không tìm thấy ca"));
   }
 
+  private DoctorSchedule requireScheduleForUpdate(UUID publicId) {
+    return scheduleRepository
+        .findForUpdateByPublicId(publicId)
+        .orElseThrow(
+            () -> new NotFoundException(ScheduleErrorCode.SCHEDULE_NOT_FOUND, "Không tìm thấy ca"));
+  }
+
+  /** Booking must call this in the transaction that writes appointment_slots. */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public List<Long> lockSlotsForBooking(Long scheduleId, Instant start, Instant end) {
+    if (start == null
+        || end == null
+        || start.isBefore(Instant.now())
+        || !(end.equals(start.plusSeconds(1200)) || end.equals(start.plusSeconds(1800)))) {
+      throw new BusinessException(
+          ScheduleErrorCode.INVALID_WINDOW, "Khoảng khám phải là 20 hoặc 30 phút ở tương lai");
+    }
+    DoctorSchedule schedule = lockSchedule(scheduleId);
+    if (schedule.getStatus() != ScheduleStatus.OPEN) {
+      throw new ConflictException(ScheduleErrorCode.SCHEDULE_NOT_OPEN, "Ca không nhận lịch mới");
+    }
+    RoomAssignment room =
+        validateResources(
+            schedule.getDoctorId(), schedule.getSpecialtyId(), schedule.getRoomId(), null);
+    List<DoctorScheduleSlot> slots = slotRepository.findAllByScheduleIdOrderByStartAt(scheduleId);
+    boolean available =
+        ScheduleAvailabilityService.windows(
+                schedule,
+                room.clinicId(),
+                slots,
+                appointments.reservations(scheduleId),
+                (int) Duration.between(start, end).toMinutes(),
+                Instant.now())
+            .stream()
+            .anyMatch(window -> window.startAt().equals(start) && window.endAt().equals(end));
+    if (!available) {
+      throw new ConflictException(
+          ScheduleErrorCode.SLOT_UNAVAILABLE, "Khung giờ đã hết chỗ hoặc bị chặn");
+    }
+    return slots.stream()
+        .filter(slot -> !slot.getStartAt().isBefore(start) && !slot.getEndAt().isAfter(end))
+        .map(DoctorScheduleSlot::getId)
+        .toList();
+  }
+
+  /** Call before creating/updating appointments; locks persist through the outer transaction. */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public void lockForBookingChange(Long scheduleId) {
+    lockSchedule(scheduleId);
+  }
+
+  private DoctorSchedule lockSchedule(Long id) {
+    return scheduleRepository
+        .findForUpdateById(id)
+        .orElseThrow(
+            () -> new NotFoundException(ScheduleErrorCode.SCHEDULE_NOT_FOUND, "Không tìm thấy ca"));
+  }
+
   private Shift requireShift(Long id) {
     return shiftRepository
         .findById(id)
@@ -280,26 +352,33 @@ public class ScheduleService {
       throw new BusinessException(ScheduleErrorCode.INVALID_SHIFT, "Chỉ hỗ trợ ba ca cố định");
     }
     validateCapacity(shift, request.generalCapacity(), request.specialistCapacity());
-    if (!doctors.exists(request.doctorId())) {
+    validateResources(
+        request.doctorId(), request.specialtyId(), request.roomId(), request.clinicId());
+    ensureNoOverlap(request.doctorId(), request.roomId(), start, end, excludeId);
+  }
+
+  private RoomAssignment validateResources(
+      Long doctorId, Long specialtyId, Long roomId, Long clinicId) {
+    if (!doctors.exists(doctorId)) {
       throw new NotFoundException(ScheduleErrorCode.DOCTOR_NOT_FOUND, "Không tìm thấy bác sĩ");
     }
-    if (!doctors.isWorking(request.doctorId())) {
+    if (!doctors.isWorking(doctorId)) {
       throw new ConflictException(
           ScheduleErrorCode.DOCTOR_NOT_WORKING, "Bác sĩ đang ngừng hoạt động");
     }
-    if (!doctors.hasSpecialty(request.doctorId(), request.specialtyId())) {
+    if (!doctors.hasSpecialty(doctorId, specialtyId)) {
       throw new ConflictException(
           ScheduleErrorCode.DOCTOR_SPECIALTY_MISMATCH,
           "Bác sĩ không thuộc chuyên khoa được phân công");
     }
     RoomAssignment room =
         facilities
-            .roomAssignment(request.roomId())
+            .roomAssignment(roomId)
             .orElseThrow(
                 () ->
                     new NotFoundException(
                         ScheduleErrorCode.ROOM_NOT_FOUND, "Không tìm thấy phòng"));
-    if (!room.clinicId().equals(request.clinicId())) {
+    if (clinicId != null && !room.clinicId().equals(clinicId)) {
       throw new ConflictException(
           ScheduleErrorCode.ROOM_CLINIC_MISMATCH, "Phòng không thuộc cơ sở được chọn");
     }
@@ -307,7 +386,7 @@ public class ScheduleService {
       throw new ConflictException(
           ScheduleErrorCode.FACILITY_NOT_OPEN, "Cơ sở hoặc phòng đang ngừng hoạt động");
     }
-    ensureNoOverlap(request.doctorId(), request.roomId(), start, end, excludeId);
+    return room;
   }
 
   private static boolean isFixedShift(Shift shift) {

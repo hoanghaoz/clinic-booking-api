@@ -36,5 +36,18 @@ public class FacilitySchedulingService {
         .getResultList();
   }
 
+  @Transactional(readOnly = true)
+  public List<Long> openRoomIds(Long clinicId) {
+    return entityManager
+        .createQuery(
+            "select r.id from Room r join r.clinic c "
+                + "where r.status = :status and c.status = :status "
+                + "and (:clinicId is null or c.id = :clinicId)",
+            Long.class)
+        .setParameter("status", FacilityStatus.OPENING)
+        .setParameter("clinicId", clinicId)
+        .getResultList();
+  }
+
   public record RoomAssignment(Long clinicId, boolean roomOpen, boolean clinicOpen) {}
 }

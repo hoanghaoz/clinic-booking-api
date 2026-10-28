@@ -2,6 +2,7 @@ package com.se100.clinic.doctor;
 
 import com.se100.clinic.employee.enums.EmployeeStatus;
 import jakarta.persistence.EntityManager;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,14 @@ public class DoctorSchedulingService {
   public boolean isWorking(Long doctorId) {
     Doctor doctor = entityManager.find(Doctor.class, doctorId);
     return doctor != null && doctor.getStatus() == EmployeeStatus.WORKING;
+  }
+
+  @Transactional(readOnly = true)
+  public List<Long> workingDoctorIds() {
+    return entityManager
+        .createQuery("select d.id from Doctor d where d.status = :status", Long.class)
+        .setParameter("status", EmployeeStatus.WORKING)
+        .getResultList();
   }
 
   @Transactional(readOnly = true)
