@@ -40,4 +40,9 @@ class DoctorSpeciality {
   @CreatedDate
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
+
+  DoctorSpeciality(Doctor doctor, Specialty specialty) {
+    this.doctor = doctor;
+    this.specialty = specialty;
+  }
 }
