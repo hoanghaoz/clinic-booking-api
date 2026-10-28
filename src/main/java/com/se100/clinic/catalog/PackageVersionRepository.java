@@ -13,6 +13,11 @@ interface PackageVersionRepository
   Optional<PackageVersion> findFirstByMedicalPackageOrderByEffectiveFromDesc(
       MedicalPackage medicalPackage);
 
+  Page<PackageVersion> findAllByMedicalPackage(MedicalPackage medicalPackage, Pageable pageable);
+
+  Optional<PackageVersion> findByMedicalPackageAndVersion(
+      MedicalPackage medicalPackage, String version);
+
   @Override
   @EntityGraph(attributePaths = {"medicalPackage"})
   Page<PackageVersion> findAll(Specification<PackageVersion> spec, Pageable pageable);

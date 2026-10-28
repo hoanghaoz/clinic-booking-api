@@ -8,6 +8,7 @@ import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateBatchDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemResponseDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemSearchRequestDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalItemUpdateDto;
 import com.se100.clinic.catalog.enums.MedicalItemType;
 import com.se100.clinic.shared.error.ConflictException;
 import java.math.BigDecimal;
@@ -92,8 +93,8 @@ class MedicalItemServiceIntegrationTest extends AbstractIntegrationTest {
         .isInstanceOf(DataIntegrityViolationException.class);
   }
 
-  private void createItem(String name, MedicalItemType type, String price) {
-    medicalItemService.createMedicalItem(
+  private MedicalItemResponseDto createItem(String name, MedicalItemType type, String price) {
+    return medicalItemService.createMedicalItem(
         new MedicalItemCreateDto(name, type, new BigDecimal(price), null, null));
   }
 
@@ -112,13 +113,14 @@ class MedicalItemServiceIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(
             searchNames(
-                new MedicalItemSearchRequestDto("SIÊU ÂM TIM " + tag, null, null, null),
+                new MedicalItemSearchRequestDto("SIÊU ÂM TIM " + tag, null, null, null, null),
                 Sort.by("name")))
         .containsExactly("Siêu âm tim " + tag);
     // '%' is escaped, so only the name holding a literal "100%" matches.
     assertThat(
             searchNames(
-                new MedicalItemSearchRequestDto("100% " + tag, null, null, null), Sort.by("name")))
+                new MedicalItemSearchRequestDto("100% " + tag, null, null, null, null),
+                Sort.by("name")))
         .containsExactly("Xét nghiệm 100% " + tag);
   }
 
@@ -132,14 +134,67 @@ class MedicalItemServiceIntegrationTest extends AbstractIntegrationTest {
 
     var range =
         new MedicalItemSearchRequestDto(
-            tag, MedicalItemType.LAB, new BigDecimal("100"), new BigDecimal("200"));
+            tag, MedicalItemType.LAB, new BigDecimal("100"), new BigDecimal("200"), null);
     assertThat(searchNames(range, Sort.by(Sort.Direction.DESC, "price")))
         .containsExactly("Mid " + tag, "Low " + tag);
 
     assertThat(
             searchNames(
-                new MedicalItemSearchRequestDto(tag, MedicalItemType.IMAGING, null, null),
+                new MedicalItemSearchRequestDto(tag, MedicalItemType.IMAGING, null, null, null),
                 Sort.by("name")))
         .containsExactly("Scan " + tag);
+  }
+
+  @Test
+  void update_shouldPersistChanges_andRejectNameOfAnotherItem() {
+    String tag = tag();
+    MedicalItemResponseDto first = createItem("First " + tag, MedicalItemType.LAB, "100");
+    createItem("Second " + tag, MedicalItemType.LAB, "100");
+
+    MedicalItemResponseDto updated =
+        medicalItemService.updateMedicalItem(
+            first.publicId(),
+            new MedicalItemUpdateDto(
+                "  Renamed " + tag, MedicalItemType.IMAGING, new BigDecimal("250"), "d", "i"));
+
+    assertThat(updated.name()).isEqualTo("Renamed " + tag);
+    assertThat(medicalItemRepository.existsByName("Renamed " + tag)).isTrue();
+    assertThat(medicalItemRepository.existsByName("First " + tag)).isFalse();
+    assertThat(medicalItemRepository.findByPublicId(first.publicId()).orElseThrow().getPrice())
+        .isEqualByComparingTo("250");
+    // keeping its own name is fine, taking another item's name is not
+    medicalItemService.updateMedicalItem(
+        first.publicId(),
+        new MedicalItemUpdateDto(
+            "Renamed " + tag, MedicalItemType.LAB, BigDecimal.ONE, null, null));
+    assertThatThrownBy(
+            () ->
+                medicalItemService.updateMedicalItem(
+                    first.publicId(),
+                    new MedicalItemUpdateDto(
+                        "Second " + tag, MedicalItemType.LAB, BigDecimal.ONE, null, null)))
+        .isInstanceOf(ConflictException.class);
+  }
+
+  @Test
+  void deactivate_shouldKeepTheRow_andSearchFiltersByActive() {
+    String tag = tag();
+    MedicalItemResponseDto kept = createItem("Kept " + tag, MedicalItemType.LAB, "100");
+    MedicalItemResponseDto retired = createItem("Retired " + tag, MedicalItemType.LAB, "100");
+
+    medicalItemService.deactivateMedicalItem(retired.publicId());
+
+    assertThat(searchNames(searchByActive(tag, true), Sort.by("name")))
+        .containsExactly("Kept " + tag);
+    assertThat(searchNames(searchByActive(tag, false), Sort.by("name")))
+        .containsExactly("Retired " + tag);
+    assertThat(searchNames(searchByActive(tag, null), Sort.by("name")))
+        .containsExactly("Kept " + tag, "Retired " + tag);
+    assertThat(medicalItemRepository.findByPublicId(kept.publicId()).orElseThrow().isActive())
+        .isTrue();
+  }
+
+  private static MedicalItemSearchRequestDto searchByActive(String tag, Boolean active) {
+    return new MedicalItemSearchRequestDto(tag, null, null, null, active);
   }
 }
