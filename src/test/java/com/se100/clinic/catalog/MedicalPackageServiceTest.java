@@ -2,18 +2,23 @@ package com.se100.clinic.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageCreateDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalPackageDetailResponseDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageItemAddDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageItemAddListDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageResponseDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageSearchRequestDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageUpdateDto;
+import com.se100.clinic.catalog.CatalogDtos.PackageVersionDetailResponseDto;
+import com.se100.clinic.catalog.CatalogDtos.PackageVersionResponseDto;
 import com.se100.clinic.catalog.enums.PackageClass;
 import com.se100.clinic.catalog.enums.PackageStatus;
 import com.se100.clinic.catalog.enums.TargetGender;
@@ -38,6 +43,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
@@ -248,6 +254,49 @@ class MedicalPackageServiceTest {
   }
 
   @Test
+  void list_shouldSortByUnitPrice_whenSortedByPrice() {
+    var request =
+        new MedicalPackageSearchRequestDto(null, null, null, null, null, null, null, null);
+    var requested = PageRequest.of(1, 5, Sort.by(Sort.Order.desc("price"), Sort.Order.asc("id")));
+    var expected =
+        PageRequest.of(1, 5, Sort.by(Sort.Order.desc("unitPrice"), Sort.Order.asc("id")));
+    when(packageVersionRepository.findAll(
+            ArgumentMatchers.<Specification<PackageVersion>>any(), eq(expected)))
+        .thenReturn(new PageImpl<>(List.of(), expected, 0));
+
+    service.list(request, requested);
+
+    verify(packageVersionRepository)
+        .findAll(ArgumentMatchers.<Specification<PackageVersion>>any(), eq(expected));
+  }
+
+  @Test
+  void create_shouldThrowBusinessException_whenMinAgeGreaterThanMaxAge() {
+    var dto =
+        new MedicalPackageCreateDto(
+            "HPV3",
+            "HPV package",
+            null,
+            null,
+            30,
+            20,
+            null,
+            PackageStatus.OPENING,
+            BigDecimal.TEN,
+            PackageClass.STANDARD,
+            30,
+            new MedicalPackageItemAddListDto(
+                List.of(new MedicalPackageItemAddDto(UUID.randomUUID(), 1, 1))),
+            null);
+    when(medicalPackageRepository.findByCode("HPV3")).thenReturn(Optional.empty());
+    when(medicalItemRepository.findAllByPublicIdIn(any())).thenReturn(List.of(new MedicalItem()));
+
+    assertThatThrownBy(() -> service.createMedicalPackage(dto))
+        .isInstanceOf(BusinessException.class);
+    verify(packageVersionRepository, never()).save(any());
+  }
+
+  @Test
   void list_shouldThrowBusinessException_whenMinAgeGreaterThanMaxAge() {
     var request = new MedicalPackageSearchRequestDto(null, null, null, null, 10, 5, null, null);
 
@@ -265,6 +314,109 @@ class MedicalPackageServiceTest {
     assertThatThrownBy(() -> service.list(request, PageRequest.of(0, 20)))
         .isInstanceOf(BusinessException.class);
     verifyNoInteractions(packageVersionRepository);
+  }
+
+  @Test
+  void listVersions_shouldMarkOnlyOpenVersionAsCurrent() {
+    MedicalPackage pkg = packageOf("HPV3", "HPV package");
+    PackageVersion old = versionOf(pkg, "v1.0", BigDecimal.ONE);
+    old.setEffectiveTo(Instant.parse("2026-02-01T00:00:00Z"));
+    PackageVersion current = versionOf(pkg, "v1.1", BigDecimal.TEN);
+    Pageable pageable = PageRequest.of(0, 20);
+    when(medicalPackageRepository.findByPublicId(pkg.getPublicId())).thenReturn(Optional.of(pkg));
+    when(packageVersionRepository.findAllByMedicalPackage(pkg, pageable))
+        .thenReturn(new PageImpl<>(List.of(current, old), pageable, 2));
+
+    Page<PackageVersionResponseDto> page = service.listVersions(pkg.getPublicId(), pageable);
+
+    assertThat(page.getContent())
+        .extracting(PackageVersionResponseDto::version, PackageVersionResponseDto::current)
+        .containsExactly(tuple("v1.1", true), tuple("v1.0", false));
+    assertThat(page.getContent().get(1).effectiveTo())
+        .isEqualTo(Instant.parse("2026-02-01T00:00:00Z"));
+  }
+
+  @Test
+  void listVersions_shouldThrowNotFound_whenPackageDoesNotExist() {
+    UUID publicId = UUID.randomUUID();
+    when(medicalPackageRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.listVersions(publicId, PageRequest.of(0, 20)))
+        .isInstanceOf(NotFoundException.class)
+        .extracting(e -> ((NotFoundException) e).getErrorCode())
+        .isEqualTo(CatalogErrorCode.MEDICAL_PACKAGE_NOT_FOUND);
+    verifyNoInteractions(packageVersionRepository);
+  }
+
+  @Test
+  void getVersion_shouldReturnSnapshotItems_inStoredOrder() {
+    MedicalPackage pkg = packageOf("HPV3", "HPV package");
+    PackageVersion version = versionOf(pkg, "v1.0", BigDecimal.TEN);
+    MedicalItem item = new MedicalItem();
+    item.setName("Current name");
+    PackageVersionItem versionItem = new PackageVersionItem();
+    versionItem.setItem(item);
+    versionItem.setItemNameSnapshot("Name at the time");
+    versionItem.setQuantity(2);
+    versionItem.setPosition(1);
+    when(medicalPackageRepository.findByPublicId(pkg.getPublicId())).thenReturn(Optional.of(pkg));
+    when(packageVersionRepository.findByMedicalPackageAndVersion(pkg, "v1.0"))
+        .thenReturn(Optional.of(version));
+    when(packageVersionItemRepository.findAllByPackageVersionIdOrderByPositionAsc(any()))
+        .thenReturn(List.of(versionItem));
+
+    PackageVersionDetailResponseDto dto = service.getVersion(pkg.getPublicId(), "v1.0");
+
+    assertThat(dto.version()).isEqualTo("v1.0");
+    assertThat(dto.current()).isTrue();
+    assertThat(dto.medicalItems())
+        .singleElement()
+        .satisfies(
+            item0 -> {
+              assertThat(item0.medicalItemPublicId()).isEqualTo(item.getPublicId());
+              assertThat(item0.name()).isEqualTo("Name at the time");
+              assertThat(item0.quantity()).isEqualTo(2);
+            });
+  }
+
+  @Test
+  void getVersion_shouldThrowNotFound_whenVersionDoesNotExist() {
+    MedicalPackage pkg = packageOf("HPV3", "HPV package");
+    when(medicalPackageRepository.findByPublicId(pkg.getPublicId())).thenReturn(Optional.of(pkg));
+    when(packageVersionRepository.findByMedicalPackageAndVersion(pkg, "v9.9"))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.getVersion(pkg.getPublicId(), "v9.9"))
+        .isInstanceOf(NotFoundException.class)
+        .extracting(e -> ((NotFoundException) e).getErrorCode())
+        .isEqualTo(CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND);
+  }
+
+  @Test
+  void getMedicalPackage_shouldReturnCurrentVersionWithItems() {
+    MedicalPackage pkg = packageOf("HPV3", "HPV package");
+    PackageVersion current = versionOf(pkg, "v1.1", BigDecimal.TEN);
+    when(medicalPackageRepository.findByPublicId(pkg.getPublicId())).thenReturn(Optional.of(pkg));
+    when(packageVersionRepository.findFirstByMedicalPackageOrderByEffectiveFromDesc(pkg))
+        .thenReturn(Optional.of(current));
+    when(packageVersionItemRepository.findAllByPackageVersionIdOrderByPositionAsc(any()))
+        .thenReturn(List.of());
+
+    MedicalPackageDetailResponseDto dto = service.getMedicalPackage(pkg.getPublicId());
+
+    assertThat(dto.publicId()).isEqualTo(pkg.getPublicId());
+    assertThat(dto.version()).isEqualTo("v1.1");
+    assertThat(dto.price()).isEqualByComparingTo("10");
+    assertThat(dto.medicalItems()).isEmpty();
+  }
+
+  @Test
+  void getMedicalPackage_shouldThrowNotFound_whenPackageDoesNotExist() {
+    UUID publicId = UUID.randomUUID();
+    when(medicalPackageRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.getMedicalPackage(publicId))
+        .isInstanceOf(NotFoundException.class);
   }
 
   @ParameterizedTest

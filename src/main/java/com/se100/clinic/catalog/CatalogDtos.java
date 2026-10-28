@@ -14,6 +14,8 @@ import java.util.UUID;
 
 public final class CatalogDtos {
 
+  private static final int MAX_AGE = 150;
+
   private CatalogDtos() {}
 
   /** Fields client send to server , both create and update. */
@@ -41,56 +43,74 @@ public final class CatalogDtos {
     Instant effectiveFrom();
   }
 
+  // Required = what the service cannot default. gender falls back to BOTH, effectiveFrom to now,
+  // description/instruction/ages are nullable columns.
   @Schema(
       requiredProperties = {
         "code",
         "name",
-        "description",
-        "gender",
-        "instruction",
         "status",
         "price",
         "packageClass",
         "consultationMinutes",
-        "medicalItems",
-        "effectiveFrom"
+        "medicalItems"
         // TODO(specialties): add "specialtyIds"
       })
   public record MedicalPackageCreateDto(
-      String code,
-      String name,
+      @NotBlank(message = "Mã gói khám không được để trống")
+          @Size(max = 40, message = "Mã gói khám tối đa 40 ký tự")
+          String code,
+      @NotBlank(message = "Tên gói khám không được để trống")
+          @Size(max = 200, message = "Tên gói khám tối đa 200 ký tự")
+          String name,
       String description,
       TargetGender gender,
-      Integer minAge,
-      Integer maxAge,
+      @Min(value = 0, message = "Tuổi tối thiểu không được âm")
+          @Max(value = MAX_AGE, message = "Tuổi tối thiểu không được vượt quá 150")
+          Integer minAge,
+      @Min(value = 0, message = "Tuổi tối đa không được âm")
+          @Max(value = MAX_AGE, message = "Tuổi tối đa không được vượt quá 150")
+          Integer maxAge,
       String instruction,
-      PackageStatus status,
-      BigDecimal price,
-      PackageClass packageClass,
-      Integer consultationMinutes,
+      @NotNull(message = "Trạng thái gói khám không được để trống") PackageStatus status,
+      @NotNull(message = "Giá gói khám không được để trống")
+          @PositiveOrZero(message = "Giá gói khám không được âm")
+          @Digits(integer = 13, fraction = 2, message = "Giá gói khám tối đa 13 chữ số, 2 số lẻ")
+          BigDecimal price,
+      @NotNull(message = "Hạng gói khám không được để trống") PackageClass packageClass,
+      @NotNull(message = "Thời lượng tư vấn không được để trống")
+          @Positive(message = "Thời lượng tư vấn phải là số dương")
+          Integer consultationMinutes,
       @NotNull(message = "Danh sách hạng mục không được để trống") @Valid
           MedicalPackageItemAddListDto medicalItems,
       Instant effectiveFrom
       // TODO(specialties): add `List<Long> specialtyIds` (required, at least one)
       ) implements PackageVersionFields {}
 
+  /** Same limits as create; every field is optional and a missing one keeps the current value. */
   public record MedicalPackageUpdateDto(
-      String name,
+      @Size(max = 200, message = "Tên gói khám tối đa 200 ký tự") String name,
       String description,
       TargetGender gender,
-      Integer minAge,
-      Integer maxAge,
+      @Min(value = 0, message = "Tuổi tối thiểu không được âm")
+          @Max(value = MAX_AGE, message = "Tuổi tối thiểu không được vượt quá 150")
+          Integer minAge,
+      @Min(value = 0, message = "Tuổi tối đa không được âm")
+          @Max(value = MAX_AGE, message = "Tuổi tối đa không được vượt quá 150")
+          Integer maxAge,
       String instruction,
       PackageStatus status,
-      BigDecimal price,
+      @PositiveOrZero(message = "Giá gói khám không được âm")
+          @Digits(integer = 13, fraction = 2, message = "Giá gói khám tối đa 13 chữ số, 2 số lẻ")
+          BigDecimal price,
       PackageClass packageClass,
-      Integer consultationMinutes,
+      @Positive(message = "Thời lượng tư vấn phải là số dương") Integer consultationMinutes,
       @Valid MedicalPackageItemAddListDto medicalItems,
       Instant effectiveFrom)
       implements PackageVersionFields {}
 
   public record MedicalPackageSearchRequestDto(
-      String keyword,
+      @Size(max = 200, message = "keyword không được vượt quá 200 ký tự") String keyword,
       PackageStatus status,
       TargetGender gender,
       PackageClass packageClass,
@@ -205,6 +225,159 @@ public final class CatalogDtos {
           versionItem.getInstructionSnapshot(),
           versionItem.getQuantity(),
           versionItem.getPosition());
+    }
+  }
+
+  /** One version of a package; {@code current} is the version that is in effect now. */
+  @Schema(
+      requiredProperties = {
+        "version",
+        "name",
+        "gender",
+        "status",
+        "price",
+        "packageClass",
+        "consultationMinutes",
+        "effectiveFrom",
+        "current"
+      })
+  public record PackageVersionResponseDto(
+      String version,
+      String name,
+      String description,
+      TargetGender gender,
+      Integer minAge,
+      Integer maxAge,
+      String instruction,
+      PackageStatus status,
+      BigDecimal price,
+      PackageClass packageClass,
+      Integer consultationMinutes,
+      Instant effectiveFrom,
+      Instant effectiveTo,
+      boolean current) {
+    static PackageVersionResponseDto from(PackageVersion packageVersion) {
+      return new PackageVersionResponseDto(
+          packageVersion.getVersion(),
+          packageVersion.getName(),
+          packageVersion.getDescription(),
+          packageVersion.getTarget(),
+          packageVersion.getMinAge(),
+          packageVersion.getMaxAge(),
+          packageVersion.getInstruction(),
+          packageVersion.getStatus(),
+          packageVersion.getUnitPrice(),
+          packageVersion.getPackageClass(),
+          packageVersion.getConsultationMinutes(),
+          packageVersion.getEffectiveFrom(),
+          packageVersion.getEffectiveTo(),
+          packageVersion.getEffectiveTo() == null);
+    }
+  }
+
+  /** A version together with its items, in display order. */
+  @Schema(
+      requiredProperties = {
+        "version",
+        "name",
+        "gender",
+        "status",
+        "price",
+        "packageClass",
+        "consultationMinutes",
+        "effectiveFrom",
+        "current",
+        "medicalItems"
+      })
+  public record PackageVersionDetailResponseDto(
+      String version,
+      String name,
+      String description,
+      TargetGender gender,
+      Integer minAge,
+      Integer maxAge,
+      String instruction,
+      PackageStatus status,
+      BigDecimal price,
+      PackageClass packageClass,
+      Integer consultationMinutes,
+      Instant effectiveFrom,
+      Instant effectiveTo,
+      boolean current,
+      List<MedicalPackageItemResponseDto> medicalItems) {
+    static PackageVersionDetailResponseDto from(
+        PackageVersion packageVersion, List<PackageVersionItem> versionItems) {
+      PackageVersionResponseDto base = PackageVersionResponseDto.from(packageVersion);
+      return new PackageVersionDetailResponseDto(
+          base.version(),
+          base.name(),
+          base.description(),
+          base.gender(),
+          base.minAge(),
+          base.maxAge(),
+          base.instruction(),
+          base.status(),
+          base.price(),
+          base.packageClass(),
+          base.consultationMinutes(),
+          base.effectiveFrom(),
+          base.effectiveTo(),
+          base.current(),
+          versionItems.stream().map(MedicalPackageItemResponseDto::from).toList());
+    }
+  }
+
+  /** A package as it is now: its current version and that version's items. */
+  @Schema(
+      requiredProperties = {
+        "publicId",
+        "code",
+        "name",
+        "version",
+        "gender",
+        "status",
+        "price",
+        "packageClass",
+        "consultationMinutes",
+        "effectiveFrom",
+        "medicalItems"
+      })
+  public record MedicalPackageDetailResponseDto(
+      UUID publicId,
+      String code,
+      String name,
+      String version,
+      String description,
+      TargetGender gender,
+      Integer minAge,
+      Integer maxAge,
+      String instruction,
+      PackageStatus status,
+      BigDecimal price,
+      PackageClass packageClass,
+      Integer consultationMinutes,
+      Instant effectiveFrom,
+      List<MedicalPackageItemResponseDto> medicalItems) {
+    static MedicalPackageDetailResponseDto from(
+        MedicalPackage medicalPackage,
+        PackageVersion packageVersion,
+        List<PackageVersionItem> versionItems) {
+      return new MedicalPackageDetailResponseDto(
+          medicalPackage.getPublicId(),
+          medicalPackage.getCode(),
+          medicalPackage.getName(),
+          packageVersion.getVersion(),
+          packageVersion.getDescription(),
+          packageVersion.getTarget(),
+          packageVersion.getMinAge(),
+          packageVersion.getMaxAge(),
+          packageVersion.getInstruction(),
+          packageVersion.getStatus(),
+          packageVersion.getUnitPrice(),
+          packageVersion.getPackageClass(),
+          packageVersion.getConsultationMinutes(),
+          packageVersion.getEffectiveFrom(),
+          versionItems.stream().map(MedicalPackageItemResponseDto::from).toList());
     }
   }
 }

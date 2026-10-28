@@ -63,8 +63,8 @@ class MedicalItemController {
     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResult.of(created));
   }
 
-  @GetMapping("/search")
-  @Operation(summary = "Tìm kiếm hạng mục y tế")
+  @GetMapping
+  @Operation(summary = "Tìm kiếm / danh sách hạng mục y tế (phân trang)")
   @ApiResponse(responseCode = "200", description = "Kết quả tìm kiếm")
   ApiResult<List<MedicalItemResponseDto>> searchMedicalItems(
       @ParameterObject @Valid CatalogDtos.MedicalItemSearchRequestDto request,

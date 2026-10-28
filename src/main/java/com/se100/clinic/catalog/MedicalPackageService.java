@@ -11,6 +11,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -20,10 +21,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MedicalPackageService {
-  // Sort fields are PackageVersion properties: the list is built from current versions.
+  // Sort fields use the response names; the list is built from current versions, so they are
+  // mapped onto PackageVersion properties in toEntitySort.
   public static final Set<String> SORTABLE_FIELDS =
-      Set.of("code", "name", "status", "unitPrice", "createdAt");
+      Set.of("code", "name", "status", "price", "createdAt");
   public static final Sort DEFAULT_SORT = Sort.by("name");
+
+  public static final Set<String> VERSION_SORTABLE_FIELDS = Set.of("effectiveFrom", "createdAt");
+  public static final Sort VERSION_DEFAULT_SORT = Sort.by(Sort.Order.desc("effectiveFrom"));
 
   private static final String FIRST_VERSION = "v1.0";
   private static final int MAX_MINOR_VERSION = 10;
@@ -54,7 +59,34 @@ public class MedicalPackageService {
     version.setConsultationMinutes(
         coalesce(dto.consultationMinutes(), base.getConsultationMinutes()));
     version.setEffectiveFrom(coalesce(dto.effectiveFrom(), Instant.now()));
+    validateAgeRange(version);
     return version;
+  }
+
+  /** Checked on the merged version, so an update that sets only one bound is covered too. */
+  private static void validateAgeRange(PackageVersion version) {
+    if (version.getMinAge() != null
+        && version.getMaxAge() != null
+        && version.getMinAge() > version.getMaxAge()) {
+      throw new BusinessException(
+          CommonErrorCode.VALIDATION_ERROR,
+          "Dữ liệu gửi lên không hợp lệ",
+          List.of(new FieldViolation("minAge", "minAge phải nhỏ hơn hoặc bằng maxAge")));
+    }
+  }
+
+  /** Renames the API sort field {@code price} to the entity property {@code unitPrice}. */
+  private static Pageable toEntitySort(Pageable pageable) {
+    Sort sort =
+        Sort.by(
+            pageable.getSort().stream()
+                .map(
+                    order ->
+                        "price".equals(order.getProperty())
+                            ? order.withProperty("unitPrice")
+                            : order)
+                .toList());
+    return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
   }
 
   private static <T> T coalesce(T value, T fallback) {
@@ -200,8 +232,66 @@ public class MedicalPackageService {
       MedicalPackageSearchRequestDto request, Pageable pageable) {
     validateSearchRequest(request);
     return packageVersionRepository
-        .findAll(matching(request), pageable)
+        .findAll(matching(request), toEntitySort(pageable))
         .map(version -> MedicalPackageResponseDto.from(version.getMedicalPackage(), version));
+  }
+
+  /** The package with its current version and that version's items. */
+  @Transactional(readOnly = true)
+  public MedicalPackageDetailResponseDto getMedicalPackage(UUID packagePublicId) {
+    MedicalPackage medicalPackage = findPackage(packagePublicId);
+    PackageVersion currentVersion = findCurrentVersion(medicalPackage);
+    return MedicalPackageDetailResponseDto.from(
+        medicalPackage, currentVersion, versionItems(currentVersion));
+  }
+
+  /**
+   * @param pageable already validated by {@code PageParams#toPageable}
+   */
+  @Transactional(readOnly = true)
+  public Page<PackageVersionResponseDto> listVersions(UUID packagePublicId, Pageable pageable) {
+    MedicalPackage medicalPackage = findPackage(packagePublicId);
+    return packageVersionRepository
+        .findAllByMedicalPackage(medicalPackage, pageable)
+        .map(PackageVersionResponseDto::from);
+  }
+
+  @Transactional(readOnly = true)
+  public PackageVersionDetailResponseDto getVersion(UUID packagePublicId, String version) {
+    MedicalPackage medicalPackage = findPackage(packagePublicId);
+    PackageVersion packageVersion =
+        packageVersionRepository
+            .findByMedicalPackageAndVersion(medicalPackage, version)
+            .orElseThrow(
+                () ->
+                    new NotFoundException(
+                        CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND,
+                        "Không tìm thấy phiên bản '" + version + "' của gói khám"));
+    return PackageVersionDetailResponseDto.from(packageVersion, versionItems(packageVersion));
+  }
+
+  private MedicalPackage findPackage(UUID packagePublicId) {
+    return medicalPackageRepository
+        .findByPublicId(packagePublicId)
+        .orElseThrow(
+            () ->
+                new NotFoundException(
+                    CatalogErrorCode.MEDICAL_PACKAGE_NOT_FOUND, "Không tìm thấy gói khám"));
+  }
+
+  private PackageVersion findCurrentVersion(MedicalPackage medicalPackage) {
+    return packageVersionRepository
+        .findFirstByMedicalPackageOrderByEffectiveFromDesc(medicalPackage)
+        .orElseThrow(
+            () ->
+                new NotFoundException(
+                    CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND,
+                    "Không tìm thấy phiên bản của gói khám"));
+  }
+
+  private List<PackageVersionItem> versionItems(PackageVersion packageVersion) {
+    return packageVersionItemRepository.findAllByPackageVersionIdOrderByPositionAsc(
+        packageVersion.getId());
   }
 
   @Transactional
@@ -231,21 +321,8 @@ public class MedicalPackageService {
   @Transactional
   public MedicalPackageResponseDto updateMedicalPackage(
       MedicalPackageUpdateDto dto, UUID packagePublicId) {
-    MedicalPackage medicalPackage =
-        medicalPackageRepository
-            .findByPublicId(packagePublicId)
-            .orElseThrow(
-                () ->
-                    new NotFoundException(
-                        CatalogErrorCode.MEDICAL_PACKAGE_NOT_FOUND, "Không tìm thấy gói khám"));
-    PackageVersion currentVersion =
-        packageVersionRepository
-            .findFirstByMedicalPackageOrderByEffectiveFromDesc(medicalPackage)
-            .orElseThrow(
-                () ->
-                    new NotFoundException(
-                        CatalogErrorCode.MEDICAL_PACKAGE_VERSION_NOT_FOUND,
-                        "Không tìm thấy phiên bản của gói khám"));
+    MedicalPackage medicalPackage = findPackage(packagePublicId);
+    PackageVersion currentVersion = findCurrentVersion(medicalPackage);
     // Validate the new items before anything is changed.
     Map<UUID, MedicalItem> itemsById =
         dto.medicalItems() == null ? null : loadMedicalItems(dto.medicalItems());

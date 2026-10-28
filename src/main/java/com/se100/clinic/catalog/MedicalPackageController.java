@@ -1,9 +1,12 @@
 package com.se100.clinic.catalog;
 
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageCreateDto;
+import com.se100.clinic.catalog.CatalogDtos.MedicalPackageDetailResponseDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageResponseDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageSearchRequestDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalPackageUpdateDto;
+import com.se100.clinic.catalog.CatalogDtos.PackageVersionDetailResponseDto;
+import com.se100.clinic.catalog.CatalogDtos.PackageVersionResponseDto;
 import com.se100.clinic.shared.PageParams;
 import com.se100.clinic.shared.api.ApiDocs;
 import com.se100.clinic.shared.api.ApiResult;
@@ -71,13 +74,63 @@ class MedicalPackageController {
       summary = "Tìm kiếm / danh sách gói khám (phân trang)",
       description =
           "Chỉ trả phiên bản hiện hành của mỗi gói. Sắp xếp được theo: code, name, status,"
-              + " unitPrice, createdAt. Mặc định: name tăng dần. `meta.page` bắt đầu từ 1.")
+              + " price, createdAt. Mặc định: name tăng dần. `meta.page` bắt đầu từ 1.")
   ApiResult<List<MedicalPackageResponseDto>> searchMedicalPackages(
-      @ParameterObject MedicalPackageSearchRequestDto search,
+      @ParameterObject @Valid MedicalPackageSearchRequestDto search,
       @ParameterObject PageParams pageParams) {
     Pageable pageable =
         pageParams.toPageable(
             MedicalPackageService.SORTABLE_FIELDS, MedicalPackageService.DEFAULT_SORT);
     return ApiResult.of(service.list(search, pageable));
+  }
+
+  @GetMapping("/{packagePublicId}")
+  @Operation(
+      summary = "Chi tiết gói khám",
+      description = "Phiên bản hiện hành của gói, kèm danh sách hạng mục theo thứ tự hiển thị.")
+  @ApiResponse(
+      responseCode = "404",
+      description = "MEDICAL_PACKAGE_NOT_FOUND",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  ApiResult<MedicalPackageDetailResponseDto> getMedicalPackage(@PathVariable UUID packagePublicId) {
+    return ApiResult.of(service.getMedicalPackage(packagePublicId));
+  }
+
+  @GetMapping("/{packagePublicId}/versions")
+  @Operation(
+      summary = "Danh sách phiên bản của gói khám (phân trang)",
+      description =
+          "Mọi phiên bản của gói, không kèm hạng mục (xem chi tiết một phiên bản để lấy hạng"
+              + " mục). Sắp xếp được theo: effectiveFrom, createdAt. Mặc định: effectiveFrom giảm"
+              + " dần (mới nhất trước). `current` = true là phiên bản đang hiệu lực.")
+  @ApiResponse(
+      responseCode = "404",
+      description = "MEDICAL_PACKAGE_NOT_FOUND",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  ApiResult<List<PackageVersionResponseDto>> listVersions(
+      @PathVariable UUID packagePublicId, @ParameterObject PageParams pageParams) {
+    Pageable pageable =
+        pageParams.toPageable(
+            MedicalPackageService.VERSION_SORTABLE_FIELDS,
+            MedicalPackageService.VERSION_DEFAULT_SORT);
+    return ApiResult.of(service.listVersions(packagePublicId, pageable));
+  }
+
+  @GetMapping("/{packagePublicId}/versions/{version}")
+  @Operation(
+      summary = "Chi tiết một phiên bản của gói khám",
+      description =
+          "`version` có dạng như `v1.0`. Trả kèm danh sách hạng mục theo thứ tự hiển thị, đúng"
+              + " như lúc phiên bản được tạo (tên và hướng dẫn là bản chụp).")
+  @ApiResponse(
+      responseCode = "404",
+      description = "MEDICAL_PACKAGE_NOT_FOUND hoặc MEDICAL_PACKAGE_VERSION_NOT_FOUND",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  ApiResult<PackageVersionDetailResponseDto> getVersion(
+      @PathVariable UUID packagePublicId, @PathVariable String version) {
+    return ApiResult.of(service.getVersion(packagePublicId, version));
   }
 }
