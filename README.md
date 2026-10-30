@@ -155,13 +155,13 @@ class ModularityTests {
 
 | Module | Nghiệp vụ | Trạng thái |
 |---|---|---|
-| `identity` | Tài khoản, Role, phân quyền, JWT | Chưa tạo |
+| `identity` (`auth`) | Tài khoản, Role, phân quyền, JWT | Có đăng nhập BCrypt + access JWT và kiểm tra tài khoản/role hiện tại; chưa có đăng ký, refresh token và quản trị tài khoản |
 | `facility` | Cơ sở, phòng chức năng | Chưa tạo |
 | `catalog` | Gói khám/Dịch vụ/Hạng mục (GoiKham/DichVu/HangMucKham), có versioning | Chưa tạo |
 | **`doctor`** | Chuyên khoa/Bác sĩ (ChuyenKhoa/BacSi) | **Đầy đủ — module mẫu (Specialty CRUD + phân trang/lọc/sắp xếp + mã lỗi riêng)** |
-| `schedule` | Lịch làm việc, ca, sức chứa slot | Chưa tạo |
+| `schedule` | Lịch làm việc, ca, sức chứa slot | Đã triển khai SCH-01–SCH-05, FR-23/24 và lịch/danh sách khám FR-50; xem [schedule API](docs/schedule-api.md) |
 | `patient` | Bệnh nhân, thẻ điện tử, tiền sử bệnh | Chưa tạo |
-| `booking` | Đặt lịch, Phiếu đặt lịch (QR), hủy/đổi, Waitlist | Chưa tạo |
+| `booking` (`appointment`) | Đặt lịch, Phiếu đặt lịch (QR), hủy/đổi, Waitlist | Có API nội bộ giữ/nhả/đổi slot trong giao dịch; chưa có đầy đủ HTTP booking, QR và waitlist |
 | `reception` | Tiếp nhận, Phiếu tiếp nhận, phân luồng | Chưa tạo |
 | `examination` | Khám, chỉ định phát sinh, kết quả CLS, Phiếu kết quả, đơn thuốc | Chưa tạo |
 | `billing` | Tạm ứng, quyết toán, hoàn tiền, hóa đơn | Chưa tạo |
@@ -257,6 +257,14 @@ Cấu hình đầy đủ: [`lefthook.yml`](lefthook.yml), script hỗ trợ ở
 
 ## Bảo mật
 
+- **Đăng nhập:** bật `JWT_ENABLED=true` ở dev và truyền `JWT_SECRET` ngẫu nhiên tối thiểu
+  32 byte vào môi trường chạy Java. Profile `prod` luôn bật JWT và dừng khởi động nếu thiếu
+  secret hợp lệ. `POST /api/v1/auth/login` nhận `username` (hoặc email) và `password`, trả
+  `data.accessToken`, `data.tokenType=Bearer`, `data.expiresIn=1800`. Tài khoản hiện có phải
+  lưu mật khẩu BCrypt. Gửi `Authorization: Bearer <accessToken>` khi gọi API. Server kiểm tra
+  chữ ký HS256, issuer, audience, hạn token và trạng thái/role hiện tại trong DB mỗi request.
+  Chưa có đăng ký/refresh token; token hết hạn cần đăng nhập lại. Xem [hướng dẫn schedule](docs/schedule-api.md).
+
 - **Dữ liệu nhạy cảm** (CCCD/hộ chiếu, tiền sử bệnh, kết quả khám): KHÔNG log ở bất kỳ tầng
   nào, KHÔNG trả trong response lỗi (`GlobalExceptionHandler` chỉ trả message chung cho lỗi
   hệ thống — xem `com.se100.clinic.shared.GlobalExceptionHandler`).
@@ -327,14 +335,12 @@ Add branch protection rule cho `main`, bật:
 
 Những vấn đề kiến trúc CHƯA chốt, cả nhóm cần bàn khi triển khai module liên quan:
 
-1. **Khoá slot khi đặt lịch đồng thời** (module `booking`/`schedule`): 2 bệnh nhân cùng đặt
-   slot cuối cùng cùng lúc thì xử lý sao? Ứng viên: optimistic locking (`@Version` trên
-   entity slot) + retry ở tầng Service, hoặc constraint duy nhất ở DB
-   (`unique(schedule_id, slot_index)` cho bookings) kết hợp bắt `DataIntegrityViolationException`
-   trả về lỗi "hết chỗ". Phần hạ tầng đã có sẵn: `DbErrors` để nhận ra loại vi phạm và
-   `GlobalExceptionHandler` đã đổi unique/exclusion/`@Version` thành `409` (xem
-   [mục 3.6](docs/conventions/api-conventions.md#36-lỗi-từ-constraint-db)); module `booking` chỉ
-   cần dịch sang mã riêng `SLOT_FULL`.
+1. **Tích hợp nghiệp vụ booking:** cơ chế đồng thời đã dùng khóa ghi trên ca và unique index
+   `appointment_slots(slot_id) WHERE released_at IS NULL`. Booking phải dùng
+   `ScheduleService.lockForBookingChange` trước khi tạo/hủy lịch hẹn, rồi gọi
+   `AppointmentReservationService.reserve/release` trong cùng transaction. Khi đổi ca/giờ,
+   `move` tự khóa cả hai ca theo thứ tự ID; không khóa riêng một ca trước khi gọi. Cần hoàn thiện
+   các quy tắc bệnh nhân, thanh toán, QR, lịch sử và waitlist tại module booking.
 2. **Mã hoá CCCD/hộ chiếu** (module `patient`): xem đề xuất sơ bộ ở mục
    [Bảo mật](#bảo-mật) — cần quyết định thuật toán, nơi lưu khoá, và có cần tra cứu theo
    CCCD hay không (ảnh hưởng cách thiết kế cột hash).

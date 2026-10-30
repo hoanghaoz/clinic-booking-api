@@ -33,6 +33,13 @@ spring:
             enable: false
 
 app:
+  security:
+    jwt:
+      enabled: ${JWT_ENABLED:false}
+      secret: ${JWT_SECRET:}
+      issuer: clinic-booking-api
+      audience: clinic-booking-api
+      lifetime-seconds: 1800
   # Dùng cho @Scheduled(zone=...) và spring.jackson.time-zone — đổi 1 chỗ, áp dụng toàn app.
   timezone: Asia/Ho_Chi_Minh
   cors:

@@ -1,0 +1,52 @@
+package com.se100.clinic.doctor;
+
+import com.se100.clinic.employee.enums.EmployeeStatus;
+import jakarta.persistence.EntityManager;
+import java.util.List;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Read-only doctor facts exposed to the schedule module without sharing entities or repositories.
+ */
+@Service
+@RequiredArgsConstructor
+public class DoctorSchedulingService {
+  private final EntityManager entityManager;
+
+  @Transactional(readOnly = true)
+  public boolean exists(Long doctorId) {
+    return entityManager.find(Doctor.class, doctorId) != null;
+  }
+
+  @Transactional(readOnly = true)
+  public boolean isWorking(Long doctorId) {
+    Doctor doctor = entityManager.find(Doctor.class, doctorId);
+    return doctor != null && doctor.getStatus() == EmployeeStatus.WORKING;
+  }
+
+  @Transactional(readOnly = true)
+  public List<Long> workingDoctorIds() {
+    return entityManager
+        .createQuery("select d.id from Doctor d where d.status = :status", Long.class)
+        .setParameter("status", EmployeeStatus.WORKING)
+        .getResultList();
+  }
+
+  @Transactional(readOnly = true)
+  public boolean hasSpecialty(Long doctorId, Long specialtyId) {
+    return entityManager.find(DoctorSpeciality.class, new DoctorSpecialityId(doctorId, specialtyId))
+        != null;
+  }
+
+  @Transactional(readOnly = true)
+  public Optional<Long> doctorIdForUser(Long userId) {
+    return entityManager
+        .createQuery("select d.id from Doctor d where d.userId = :userId", Long.class)
+        .setParameter("userId", userId)
+        .getResultStream()
+        .findFirst();
+  }
+}

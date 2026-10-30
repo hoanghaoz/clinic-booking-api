@@ -56,14 +56,15 @@ phương án nào. Cập nhật liên tục trong lúc dựng khung repo.
   "import package-private từ module khác → lỗi compile" được làm THỦ CÔNG 1 lần ở Bước 8
   (thêm import sai, quan sát lỗi compile, revert lại) thay vì giữ vĩnh viễn trong test suite.
 
-### 5. OAuth2 Resource Server / JWT — CHƯA thêm
+### 5. OAuth2 Resource Server và JWT
 
-- **Quyết định:** chưa thêm `spring-boot-starter-oauth2-resource-server`. Security hiện tại
-  chỉ có enum 5 role (`Role`) và `SecurityFilterChain` cấu hình `permitAll()` toàn bộ trong
-  profile `dev`, có `// TODO` rõ ràng.
-- **Lý do:** đúng yêu cầu brief mới — JWT thật sẽ làm cùng lúc xây module `identity`
-  (module phát hành token), tránh code security nửa vời không ai dùng được.
-- **Khi nào bật lại:** khi bắt đầu triển khai đầy đủ module `identity`.
+- **Cập nhật 2026-10-28:** thêm `spring-boot-starter-security-oauth2-resource-server` và đăng
+  nhập cho tài khoản hiện có để kiểm thử/triển khai các route schedule có phân quyền.
+- **Quyết định:** mật khẩu BCrypt, access token HS256 có thời hạn 30 phút, secret từ môi trường
+  tối thiểu 32 byte; kiểm tra issuer, audience, hạn token và trạng thái/role DB mỗi request.
+- **Profile:** dev/test bật qua `JWT_ENABLED=true`; prod luôn bật và yêu cầu secret hợp lệ.
+  Khi dev/test chưa bật JWT, method security vẫn kiểm tra các route có guard.
+- **Phần identity còn lại:** đăng ký, refresh/revoke token và quản trị tài khoản chưa triển khai.
 
 ### 6. Checkstyle — chỉ cảnh báo (WARN-ONLY), không fail build
 

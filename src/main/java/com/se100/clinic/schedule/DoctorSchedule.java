@@ -14,7 +14,6 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -27,14 +26,6 @@ import org.hibernate.annotations.ColumnDefault;
 @Entity
 @Table(
     name = "doctor_schedules",
-    uniqueConstraints = {
-      @UniqueConstraint(
-          name = "uk_doctor_schedules_doctor_date_shift",
-          columnNames = {"doctor_id", "work_date", "shift_id"}),
-      @UniqueConstraint(
-          name = "uk_doctor_schedules_room_date_shift",
-          columnNames = {"room_id", "work_date", "shift_id"})
-    },
     indexes =
         @Index(name = "idx_doctor_schedules_work_date_status", columnList = "work_date, status"))
 @Getter
@@ -70,6 +61,12 @@ class DoctorSchedule extends BaseAuditEntity {
 
   @Column(name = "end_at", nullable = false)
   private Instant endAt;
+
+  @Column(name = "general_capacity", nullable = false)
+  private Integer generalCapacity;
+
+  @Column(name = "specialist_capacity", nullable = false)
+  private Integer specialistCapacity;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false)
