@@ -11,7 +11,7 @@ import com.se100.clinic.doctor.DoctorDtos.UpdateDoctorStatusRequest;
 import com.se100.clinic.doctor.SpecialtyDtos.CreateSpecialtyRequest;
 import com.se100.clinic.doctor.SpecialtyDtos.SpecialtyResponse;
 import com.se100.clinic.employee.enums.EmployeeStatus;
-import com.se100.clinic.shared.ApiResult;
+import com.se100.clinic.shared.api.ApiResult;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -296,9 +296,10 @@ class DoctorControllerIntegrationTest extends AbstractIntegrationTest {
     jdbc.update(
         """
         insert into doctor_schedules
-          (public_id, doctor_id, specialty_id, room_id, shift_id, work_date, start_at, end_at)
+          (public_id, doctor_id, specialty_id, room_id, shift_id, work_date, start_at, end_at,
+           general_capacity, specialist_capacity)
         values (gen_random_uuid(), ?, ?, ?, ?, date '2026-11-02',
-                timestamptz '2026-11-02 08:00+07', timestamptz '2026-11-02 12:00+07')
+                timestamptz '2026-11-02 08:00+07', timestamptz '2026-11-02 12:00+07', 12, 8)
         """,
         doctorId,
         specialtyId,
