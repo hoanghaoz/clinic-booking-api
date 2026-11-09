@@ -2,17 +2,33 @@ package com.se100.clinic.facility;
 
 import com.se100.clinic.facility.enums.FacilityStatus;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Read-only room and clinic facts exposed to the schedule module. */
+/** Room and clinic availability exposed to the schedule module. */
 @Service
 @RequiredArgsConstructor
 public class FacilitySchedulingService {
   private final EntityManager entityManager;
+
+  /** Serializes a new assignment with an administrator closing its clinic or room. */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public void lockForAssignment(Long roomId) {
+    List<Long> clinicIds =
+        entityManager
+            .createQuery("select r.clinic.id from Room r where r.id = :roomId", Long.class)
+            .setParameter("roomId", roomId)
+            .getResultList();
+    if (!clinicIds.isEmpty()) {
+      entityManager.find(Clinic.class, clinicIds.getFirst(), LockModeType.PESSIMISTIC_READ);
+      entityManager.find(Room.class, roomId, LockModeType.PESSIMISTIC_READ);
+    }
+  }
 
   @Transactional(readOnly = true)
   public Optional<RoomAssignment> roomAssignment(Long roomId) {

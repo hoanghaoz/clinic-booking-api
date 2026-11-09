@@ -156,7 +156,7 @@ class ModularityTests {
 | Module | Nghiệp vụ | Trạng thái |
 |---|---|---|
 | `identity` (`auth`) | Tài khoản, Role, phân quyền, JWT | Có đăng nhập BCrypt + access JWT và kiểm tra tài khoản/role hiện tại; chưa có đăng ký, refresh token và quản trị tài khoản |
-| `facility` | Cơ sở, phòng chức năng | Chưa tạo |
+| `facility` | Cơ sở, phòng chức năng | [API quản lý cơ sở và phòng](docs/facility-api.md) |
 | `catalog` | Gói khám/Dịch vụ/Hạng mục (GoiKham/DichVu/HangMucKham), có versioning | Chưa tạo |
 | **`doctor`** | Chuyên khoa/Bác sĩ (ChuyenKhoa/BacSi) | **Đầy đủ — module mẫu (Specialty CRUD + phân trang/lọc/sắp xếp + mã lỗi riêng)** |
 | `schedule` | Lịch làm việc, ca, sức chứa slot | Đã triển khai SCH-01–SCH-05, FR-23/24 và lịch/danh sách khám FR-50; xem [schedule API](docs/schedule-api.md) |
