@@ -14,7 +14,9 @@ import org.springframework.http.HttpStatus;
  */
 enum SpecialtyErrorCode implements ErrorCode {
   SPECIALTY_NOT_FOUND(HttpStatus.NOT_FOUND),
-  SPECIALTY_CODE_EXISTS(HttpStatus.CONFLICT);
+  SPECIALTY_CODE_EXISTS(HttpStatus.CONFLICT),
+  /** A deactivated specialty cannot be newly assigned (e.g. to a doctor). */
+  SPECIALTY_INACTIVE(HttpStatus.CONFLICT);
 
   private final HttpStatus status;
 

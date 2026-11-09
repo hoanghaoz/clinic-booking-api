@@ -89,12 +89,13 @@ public record ScheduleTestData(
     long doctor =
         jdbc.queryForObject(
             """
-        insert into doctors (public_id, user_id, name, degree, status)
-        values (?, ?, 'Test doctor', 'MD', 'WORKING') returning id
+        insert into doctors (public_id, user_id, code, name, degree, status)
+        values (?, ?, ?, 'Test doctor', 'MD', 'WORKING') returning id
         """,
             Long.class,
             UUID.randomUUID(),
-            user);
+            user,
+            "BS_" + UUID.randomUUID().toString().substring(0, 20));
     jdbc.update(
         "insert into doctor_specialities (doctor_id, specialty_id) values (?, ?)",
         doctor,
