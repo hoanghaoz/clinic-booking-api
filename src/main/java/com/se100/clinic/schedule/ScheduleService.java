@@ -122,6 +122,7 @@ public class ScheduleService {
           ScheduleErrorCode.SCHEDULE_HAS_APPOINTMENTS, "Không thể hủy ca đã có lịch hẹn");
     }
     if (status == ScheduleStatus.OPEN) {
+      facilities.lockForAssignment(schedule.getRoomId());
       validateResources(
           schedule.getDoctorId(), schedule.getSpecialtyId(), schedule.getRoomId(), null);
       ensureNoOverlap(
@@ -352,6 +353,7 @@ public class ScheduleService {
       throw new BusinessException(ScheduleErrorCode.INVALID_SHIFT, "Chỉ hỗ trợ ba ca cố định");
     }
     validateCapacity(shift, request.generalCapacity(), request.specialistCapacity());
+    facilities.lockForAssignment(request.roomId());
     validateResources(
         request.doctorId(), request.specialtyId(), request.roomId(), request.clinicId());
     ensureNoOverlap(request.doctorId(), request.roomId(), start, end, excludeId);
