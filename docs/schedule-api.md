@@ -75,18 +75,19 @@ Thành công trả `201`, header `Location: /api/v1/doctor-schedules/{publicId}`
 chạy Java. File `.env` chỉ được Docker Compose đọc, không tự cấp biến cho Gradle/Java.
 Prod luôn bật JWT và không khởi động nếu thiếu secret hợp lệ. Không có secret mặc định.
 
-`POST /api/v1/auth/login` nhận `{"username":"<username hoặc email>","password":"<mật khẩu>"}`.
-Tài khoản phải có trạng thái `ACTIVE` và mật khẩu BCrypt trong `users.password_hashed`.
-Response trả `data.accessToken`, `data.tokenType=Bearer`, `data.expiresIn=1800`; không cho cache.
+- `POST /api/v1/auth/register`: đăng ký tài khoản cho `PATIENT` (mặc định) và `COMPANY` (bác sĩ, nhân viên y tế và admin được cấp tài khoản nội bộ, không tự đăng ký). Kiểm tra trùng email (`409 EMAIL_EXISTS`) và tên đăng nhập (`409 USERNAME_EXISTS`), băm mật khẩu BCrypt.
+- `POST /api/v1/auth/login`: nhận `{"username":"<username hoặc email>","password":"<mật khẩu>"}` (hoặc `email`). Tài khoản phải có trạng thái `ACTIVE` và mật khẩu BCrypt trong `users.password_hashed`. Response trả `data.accessToken`, `data.tokenType=Bearer`, `data.expiresIn=900` (~15 phút), đồng thời đính kèm refresh token (~7–30 ngày, lưu bản băm SHA-256 trong `refresh_tokens`) qua cookie `httpOnly` (`refresh_token`, `Path=/api/v1/auth`); không cho cache.
+- `POST /api/v1/auth/refresh`: xác thực refresh token từ cookie `httpOnly`, thu hồi token cũ và cấp cặp access/refresh token mới (rotation). Nếu phát hiện refresh token đã thu hồi bị dùng lại (token reuse), toàn bộ session đang hoạt động của user bị thu hồi ngay lập tức và trả `401 INVALID_REFRESH_TOKEN`.
+- `POST /api/v1/auth/logout`: thu hồi refresh token hiện tại, xóa cookie (`Max-Age=0`) và trả `204`.
+
 Client gửi `Authorization: Bearer <accessToken>`. Token có subject là `users.public_id`, chữ ký HS256,
-issuer/audience `clinic-booking-api` và thời hạn 30 phút. Role và trạng thái tài khoản được đọc lại
+issuer/audience `clinic-booking-api` và thời hạn 15 phút. Role và trạng thái tài khoản được đọc lại
 từ DB mỗi request, nên khóa tài khoản hoặc đổi role có hiệu lực với cả token đã cấp.
 
 Sai mật khẩu/tài khoản bị khóa trả `401 INVALID_CREDENTIALS`; thiếu hoặc sai token trả
 `401 AUTH_REQUIRED`; không đủ role trả `403 FORBIDDEN`. Bác sĩ cần được liên kết qua
 `doctors.user_id`; dữ liệu bệnh nhân chỉ trả qua `/my/{publicId}/patients` sau khi kiểm tra ca
-thuộc bác sĩ. Chưa triển khai đăng ký, quản trị tài khoản và refresh token; khi token hết hạn,
-client đăng nhập lại bằng tài khoản đã được cấp.
+thuộc bác sĩ.
 
 ## Tích hợp giữ chỗ cho booking
 

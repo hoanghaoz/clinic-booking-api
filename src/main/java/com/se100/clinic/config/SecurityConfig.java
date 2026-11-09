@@ -25,7 +25,13 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
   private static final String[] PUBLIC_ENDPOINTS = {
-    "/actuator/health", "/actuator/health/**", "/actuator/info", "/api/v1/auth/login"
+    "/actuator/health",
+    "/actuator/health/**",
+    "/actuator/info",
+    "/api/v1/auth/register",
+    "/api/v1/auth/login",
+    "/api/v1/auth/refresh",
+    "/api/v1/auth/logout"
   };
 
   @Bean

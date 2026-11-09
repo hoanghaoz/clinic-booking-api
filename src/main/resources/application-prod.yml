@@ -10,6 +10,7 @@ app:
   security:
     jwt:
       enabled: true
+      cookie-secure: ${JWT_COOKIE_SECURE:true}
 
 management:
   endpoint:

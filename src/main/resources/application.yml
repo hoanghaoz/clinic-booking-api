@@ -39,12 +39,16 @@ app:
       secret: ${JWT_SECRET:}
       issuer: clinic-booking-api
       audience: clinic-booking-api
-      lifetime-seconds: 1800
+      lifetime-seconds: 900
+      refresh-lifetime-seconds: 604800
+      refresh-cookie-name: refresh_token
+      cookie-secure: ${JWT_COOKIE_SECURE:false}
+      cookie-same-site: Lax
   # Dùng cho @Scheduled(zone=...) và spring.jackson.time-zone — đổi 1 chỗ, áp dụng toàn app.
   timezone: Asia/Ho_Chi_Minh
   cors:
     # Danh sách origin được phép gọi API, phân tách bằng dấu phẩy. KHÔNG BAO GIỜ dùng "*".
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
 
 management:
   endpoints:

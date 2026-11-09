@@ -36,7 +36,7 @@ public class JwtTokenService {
       @Value("${app.security.jwt.secret:}") String secret,
       @Value("${app.security.jwt.issuer:clinic-booking-api}") String issuer,
       @Value("${app.security.jwt.audience:clinic-booking-api}") String audience,
-      @Value("${app.security.jwt.lifetime-seconds:1800}") long lifetimeSeconds) {
+      @Value("${app.security.jwt.lifetime-seconds:900}") long lifetimeSeconds) {
     byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
     if (bytes.length < 32 || lifetimeSeconds < 60 || lifetimeSeconds > 3600) {
       throw new IllegalArgumentException(
