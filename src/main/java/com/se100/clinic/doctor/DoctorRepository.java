@@ -1,5 +1,6 @@
 package com.se100.clinic.doctor;
 
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
@@ -9,4 +10,6 @@ interface DoctorRepository extends JpaRepository<Doctor, Long>, JpaSpecification
   boolean existsByCode(String code);
 
   boolean existsByUserId(Long userId);
+
+  Optional<Doctor> findByUserId(Long userId);
 }

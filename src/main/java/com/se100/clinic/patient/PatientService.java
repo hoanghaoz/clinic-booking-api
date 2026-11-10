@@ -1,5 +1,8 @@
 package com.se100.clinic.patient;
 
+import static com.se100.clinic.patient.PatientAccess.requireOwnerIfPatient;
+import static com.se100.clinic.patient.PatientAccess.requireRole;
+
 import com.se100.clinic.auth.enums.UserRole;
 import com.se100.clinic.patient.PatientDtos.PatientCardResponse;
 import com.se100.clinic.patient.PatientDtos.PatientCardValidityResponse;
@@ -18,7 +21,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -244,19 +246,8 @@ public class PatientService {
                 () ->
                     new NotFoundException(
                         PatientErrorCode.PATIENT_NOT_FOUND, "Không tìm thấy bệnh nhân"));
-    if (actor.role() == UserRole.PATIENT && !Objects.equals(patient.getUserId(), actor.userId())) {
-      throw forbidden();
-    }
+    requireOwnerIfPatient(actor, patient);
     return patient;
-  }
-
-  private static void requireRole(PatientActor actor, Set<UserRole> allowedRoles) {
-    if (actor == null
-        || actor.role() == null
-        || !allowedRoles.contains(actor.role())
-        || (actor.role() == UserRole.PATIENT && actor.userId() == null)) {
-      throw forbidden();
-    }
   }
 
   private static String requireNotBlank(String value, String message) {
@@ -294,11 +285,6 @@ public class PatientService {
       }
     }
     return e;
-  }
-
-  private static BusinessException forbidden() {
-    return new BusinessException(
-        CommonErrorCode.FORBIDDEN, "Không có quyền thực hiện thao tác này");
   }
 
   private static ConflictException profileExists() {

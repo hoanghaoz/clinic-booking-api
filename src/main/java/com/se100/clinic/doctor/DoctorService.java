@@ -17,6 +17,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -167,6 +168,15 @@ public class DoctorService {
           DoctorErrorCode.DOCTOR_SPECIALTY_NOT_ASSIGNED,
           "Bác sĩ " + doctor.getCode() + " không thuộc chuyên khoa id=" + specialtyId);
     }
+  }
+
+  /**
+   * For other modules (e.g. {@code patient}): the id of the doctor behind a login account, only
+   * while the doctor is WORKING. Empty for non-doctor accounts and for stopped doctors.
+   */
+  @Transactional(readOnly = true)
+  public Optional<Long> findWorkingDoctorIdByUserId(Long userId) {
+    return doctorRepository.findByUserId(userId).filter(Doctor::isWorking).map(Doctor::getId);
   }
 
   private Doctor findOrThrow(Long id) {
