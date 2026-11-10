@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.hibernate.exception.ConstraintViolationException;
@@ -33,6 +34,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -353,6 +356,154 @@ class PatientServiceTest {
     assertThat(result.status()).isEqualTo(PatientCardStatus.REVOKED);
     assertThat(result.valid()).isFalse();
     assertThat(result.daysRemaining()).isZero();
+  }
+
+  // ---- search ----
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"MEDICAL_STAFF", "DOCTOR", "ADMIN"})
+  void searchByPhone_shouldReturnEveryMatch_whenActorIsNotPatient(UserRole role) {
+    when(patientRepository.findByPhoneOrderByIdAsc("0901234567"))
+        .thenReturn(List.of(patient(7L), patient(null)));
+
+    List<PatientResponse> result =
+        patientService.searchByPhone("0901234567", new PatientActor(5L, role));
+
+    assertThat(result).hasSize(2);
+    verify(patientRepository, never()).findByPhoneAndUserIdOrderByIdAsc(any(), any());
+  }
+
+  @Test
+  void searchByPhone_shouldOnlyQueryOwnRecord_whenActorIsPatient() {
+    when(patientRepository.findByPhoneAndUserIdOrderByIdAsc("0901234567", 7L))
+        .thenReturn(List.of(patient(7L)));
+
+    List<PatientResponse> result = patientService.searchByPhone("0901234567", PATIENT);
+
+    assertThat(result).hasSize(1);
+    verify(patientRepository, never()).findByPhoneOrderByIdAsc(any());
+  }
+
+  @Test
+  void searchByPhone_shouldReturnEmpty_whenPatientSearchesSomeoneElsesNumber() {
+    when(patientRepository.findByPhoneAndUserIdOrderByIdAsc("0911111111", 7L))
+        .thenReturn(List.of());
+
+    assertThat(patientService.searchByPhone("0911111111", PATIENT)).isEmpty();
+  }
+
+  @Test
+  void searchByPhone_shouldStripSeparators_beforeLookup() {
+    when(patientRepository.findByPhoneOrderByIdAsc("+84901234567")).thenReturn(List.of());
+
+    assertThat(patientService.searchByPhone(" +84 901-234.567 ", STAFF)).isEmpty();
+    verify(patientRepository).findByPhoneOrderByIdAsc("+84901234567");
+  }
+
+  @Test
+  void searchByPhone_shouldThrowForbidden_whenCompany() {
+    var company = new PatientActor(30L, UserRole.COMPANY);
+
+    assertThatThrownBy(() -> patientService.searchByPhone("0901234567", company))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
+    verify(patientRepository, never()).findByPhoneOrderByIdAsc(any());
+  }
+
+  @ParameterizedTest
+  @NullAndEmptySource
+  @ValueSource(strings = {"   "})
+  void searchByPhone_shouldThrowInvalidRequest_whenBlank(String phone) {
+    assertThatThrownBy(() -> patientService.searchByPhone(phone, STAFF))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_REQUEST));
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"MEDICAL_STAFF", "DOCTOR", "ADMIN"})
+  void searchByIdentityNumber_shouldReturnEveryMatch_whenActorIsNotPatient(UserRole role) {
+    when(patientRepository.findByIdentityNumberOrderByIdAsc("079123456789"))
+        .thenReturn(List.of(patient(7L)));
+
+    List<PatientResponse> result =
+        patientService.searchByIdentityNumber(" 079123456789 ", new PatientActor(5L, role));
+
+    assertThat(result).hasSize(1);
+    assertThat(result.getFirst().identityNumber()).isEqualTo("079123456789");
+    verify(patientRepository, never()).findByIdentityNumberAndUserIdOrderByIdAsc(any(), any());
+  }
+
+  @Test
+  void searchByIdentityNumber_shouldOnlyQueryOwnRecord_whenActorIsPatient() {
+    when(patientRepository.findByIdentityNumberAndUserIdOrderByIdAsc("079123456789", 7L))
+        .thenReturn(List.of(patient(7L)));
+
+    assertThat(patientService.searchByIdentityNumber("079123456789", PATIENT)).hasSize(1);
+    verify(patientRepository, never()).findByIdentityNumberOrderByIdAsc(any());
+  }
+
+  @Test
+  void searchByIdentityNumber_shouldThrowForbidden_whenCompany() {
+    var company = new PatientActor(30L, UserRole.COMPANY);
+
+    assertThatThrownBy(() -> patientService.searchByIdentityNumber("079123456789", company))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
+    verify(patientRepository, never()).findByIdentityNumberOrderByIdAsc(any());
+  }
+
+  @Test
+  void searchByIdentityNumber_shouldThrowInvalidRequest_whenBlank() {
+    assertThatThrownBy(() -> patientService.searchByIdentityNumber("  ", STAFF))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_REQUEST));
+  }
+
+  @Test
+  void create_shouldStoreNormalizedPhone_whenInputHasSeparators() {
+    stubCreateHappyPath();
+    var request =
+        new PatientCreateRequest(
+            "Nguyễn Văn A",
+            LocalDate.of(1990, 5, 20),
+            Gender.MALE,
+            "090 123-4567",
+            "a@example.com",
+            "Quận 3",
+            "CCCD",
+            "079123456789",
+            "Cục CSQLHC");
+
+    patientService.create(request, STAFF);
+
+    assertThat(captureSaved().getPhone()).isEqualTo("0901234567");
+  }
+
+  @Test
+  void update_shouldStoreNormalizedPhone_whenInputHasSeparators() {
+    UUID publicId = UUID.randomUUID();
+    Patient patient = patient(7L);
+    when(patientRepository.findByPublicId(publicId)).thenReturn(Optional.of(patient));
+    var request =
+        new PatientUpdateRequest(
+            "Nguyễn Văn B",
+            LocalDate.of(1991, 6, 21),
+            Gender.FEMALE,
+            "098.765 4321",
+            null,
+            "Quận 1");
+
+    patientService.update(publicId, request, PATIENT);
+
+    assertThat(patient.getPhone()).isEqualTo("0987654321");
   }
 
   // ---- helpers ----

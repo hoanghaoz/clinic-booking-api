@@ -29,7 +29,10 @@ import org.hibernate.annotations.ColumnDefault;
         @UniqueConstraint(
             name = "uk_patients_identity",
             columnNames = {"identity_type", "identity_issuer", "identity_number"}),
-    indexes = @Index(name = "idx_patients_phone", columnList = "phone"))
+    indexes = {
+      @Index(name = "idx_patients_phone", columnList = "phone"),
+      @Index(name = "idx_patients_identity_number", columnList = "identity_number")
+    })
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

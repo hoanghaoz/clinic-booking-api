@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -30,7 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
  * profiles and cards.
  *
  * <p>Every method takes a {@link PatientActor} and enforces access itself: a PATIENT may only touch
- * their own profile and card, MEDICAL_STAFF may touch any patient, ADMIN may only read cards.
+ * their own profile and card, MEDICAL_STAFF may touch any patient, ADMIN may only read cards, and
+ * lookups by phone / identity number are open to every role except COMPANY.
  */
 @Service
 public class PatientService {
@@ -54,6 +56,9 @@ public class PatientService {
   private static final Set<UserRole> WRITE_ROLES = Set.of(UserRole.PATIENT, UserRole.MEDICAL_STAFF);
   private static final Set<UserRole> CARD_READ_ROLES =
       Set.of(UserRole.PATIENT, UserRole.MEDICAL_STAFF, UserRole.ADMIN);
+  // Everyone except COMPANY may look patients up.
+  private static final Set<UserRole> SEARCH_ROLES =
+      Set.of(UserRole.PATIENT, UserRole.DOCTOR, UserRole.MEDICAL_STAFF, UserRole.ADMIN);
 
   private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -90,7 +95,7 @@ public class PatientService {
     patient.setFullName(request.fullName());
     patient.setDateOfBirth(request.dateOfBirth());
     patient.setGender(request.gender());
-    patient.setPhone(request.phone());
+    patient.setPhone(normalizePhone(request.phone()));
     patient.setContactEmail(request.contactEmail());
     patient.setAddress(request.address());
     patient.setIdentityType(request.identityType());
@@ -115,10 +120,43 @@ public class PatientService {
     patient.setFullName(request.fullName());
     patient.setDateOfBirth(request.dateOfBirth());
     patient.setGender(request.gender());
-    patient.setPhone(request.phone());
+    patient.setPhone(normalizePhone(request.phone()));
     patient.setContactEmail(request.contactEmail());
     patient.setAddress(request.address());
     return PatientResponse.from(patient);
+  }
+
+  /**
+   * Exact-match lookup by phone number (separators in the input are ignored). A PATIENT only ever
+   * sees their own profile, so others' records are neither returned nor revealed; every other
+   * allowed role gets all profiles sharing the number, since a phone is not unique.
+   */
+  @Transactional(readOnly = true)
+  public List<PatientResponse> searchByPhone(String phone, PatientActor actor) {
+    requireRole(actor, SEARCH_ROLES);
+    String normalized = requireNotBlank(phone, "Số điện thoại không được để trống");
+    normalized = normalizePhone(normalized);
+    List<Patient> matches =
+        actor.role() == UserRole.PATIENT
+            ? patientRepository.findByPhoneAndUserIdOrderByIdAsc(normalized, actor.userId())
+            : patientRepository.findByPhoneOrderByIdAsc(normalized);
+    return matches.stream().map(PatientResponse::from).toList();
+  }
+
+  /**
+   * Exact-match lookup by identity document number (CCCD / passport), same visibility rules as
+   * {@link #searchByPhone}. The number alone is not unique (the key also has type and issuer).
+   */
+  @Transactional(readOnly = true)
+  public List<PatientResponse> searchByIdentityNumber(String identityNumber, PatientActor actor) {
+    requireRole(actor, SEARCH_ROLES);
+    String normalized = requireNotBlank(identityNumber, "Số giấy tờ không được để trống");
+    List<Patient> matches =
+        actor.role() == UserRole.PATIENT
+            ? patientRepository.findByIdentityNumberAndUserIdOrderByIdAsc(
+                normalized, actor.userId())
+            : patientRepository.findByIdentityNumberOrderByIdAsc(normalized);
+    return matches.stream().map(PatientResponse::from).toList();
   }
 
   @Transactional(readOnly = true)
@@ -206,6 +244,18 @@ public class PatientService {
         || (actor.role() == UserRole.PATIENT && actor.userId() == null)) {
       throw forbidden();
     }
+  }
+
+  private static String requireNotBlank(String value, String message) {
+    if (value == null || value.isBlank()) {
+      throw new BusinessException(CommonErrorCode.INVALID_REQUEST, message);
+    }
+    return value.trim();
+  }
+
+  /** Stored and searched phones drop spaces, dots and dashes so exact matching is reliable. */
+  private static String normalizePhone(String phone) {
+    return phone.replaceAll("[\\s.\\-]", "");
   }
 
   private static void requireCard(Patient patient) {
