@@ -9,6 +9,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -33,6 +34,11 @@ public class SecurityConfig {
     "/api/v1/auth/login",
     "/api/v1/auth/refresh",
     "/api/v1/auth/logout"
+  };
+
+  /** Read-only lookups that guests may call; every write on these paths stays admin-only. */
+  private static final String[] PUBLIC_READ_ENDPOINTS = {
+    "/api/v1/doctors", "/api/v1/doctors/*", "/api/v1/specialties", "/api/v1/specialties/*"
   };
 
   private static void securityError(HttpServletResponse response, int status, String code)
@@ -78,6 +84,7 @@ public class SecurityConfig {
         .authorizeHttpRequests(
             auth -> {
               auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
+              auth.requestMatchers(HttpMethod.GET, PUBLIC_READ_ENDPOINTS).permitAll();
               if (tokens != null || production) {
                 auth.anyRequest().authenticated();
               } else {

@@ -10,6 +10,7 @@ import com.se100.clinic.catalog.CatalogDtos.MedicalPackageUpdateDto;
 import com.se100.clinic.catalog.CatalogDtos.PackageVersionDetailResponseDto;
 import com.se100.clinic.catalog.CatalogDtos.PackageVersionResponseDto;
 import com.se100.clinic.shared.PageParams;
+import com.se100.clinic.shared.annotation.AdminOnly;
 import com.se100.clinic.shared.api.ApiDocs;
 import com.se100.clinic.shared.api.ApiResult;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,6 +45,7 @@ class MedicalPackageController {
   private final MedicalPackageService service;
 
   @PostMapping
+  @AdminOnly
   @Operation(summary = "Tạo gói khám (phiên bản đầu tiên v1.0)")
   @ApiResponse(responseCode = "201", description = "Đã tạo; header Location trỏ tới tài nguyên mới")
   @ApiResponse(
@@ -58,6 +61,7 @@ class MedicalPackageController {
   }
 
   @PutMapping("/{packagePublicId}")
+  @AdminOnly
   @Operation(
       summary = "Cập nhật gói khám",
       description =
@@ -73,6 +77,7 @@ class MedicalPackageController {
   }
 
   @GetMapping
+  @PreAuthorize("isAuthenticated()")
   @Operation(
       summary = "Tìm kiếm / danh sách gói khám (phân trang)",
       description =
@@ -88,6 +93,7 @@ class MedicalPackageController {
   }
 
   @GetMapping("/{packagePublicId}")
+  @PreAuthorize("isAuthenticated()")
   @Operation(
       summary = "Chi tiết gói khám",
       description = "Phiên bản hiện hành của gói, kèm danh sách hạng mục theo thứ tự hiển thị.")
@@ -101,6 +107,7 @@ class MedicalPackageController {
   }
 
   @GetMapping("/{packagePublicId}/versions")
+  @PreAuthorize("isAuthenticated()")
   @Operation(
       summary = "Danh sách phiên bản của gói khám (phân trang)",
       description =
@@ -122,6 +129,7 @@ class MedicalPackageController {
   }
 
   @GetMapping("/{packagePublicId}/versions/{version}")
+  @PreAuthorize("isAuthenticated()")
   @Operation(
       summary = "Chi tiết một phiên bản của gói khám",
       description =
@@ -138,6 +146,7 @@ class MedicalPackageController {
   }
 
   @PostMapping("/{packagePublicId}/items")
+  @AdminOnly
   @Operation(
       summary = "Thêm một hạng mục vào gói khám",
       description =
@@ -167,6 +176,7 @@ class MedicalPackageController {
   }
 
   @PutMapping("/{packagePublicId}/items/{medicalItemPublicId}")
+  @AdminOnly
   @Operation(
       summary = "Đổi số lượng / vị trí của một hạng mục trong gói khám",
       description =
@@ -190,6 +200,7 @@ class MedicalPackageController {
   }
 
   @DeleteMapping("/{packagePublicId}/items/{medicalItemPublicId}")
+  @AdminOnly
   @Operation(
       summary = "Bớt một hạng mục khỏi gói khám",
       description =

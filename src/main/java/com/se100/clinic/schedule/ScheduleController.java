@@ -53,6 +53,7 @@ class ScheduleController {
   private final DoctorSchedulingService doctors;
 
   @GetMapping("/shifts")
+  @PreAuthorize("isAuthenticated()")
   @Operation(summary = "Ba mẫu ca làm việc")
   ApiResult<List<ShiftResponse>> shifts() {
     return ApiResult.of(service.shifts());

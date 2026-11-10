@@ -5,6 +5,7 @@ import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemResponseDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemUpdateDto;
 import com.se100.clinic.shared.PageParams;
+import com.se100.clinic.shared.annotation.AdminOnly;
 import com.se100.clinic.shared.api.ApiDocs;
 import com.se100.clinic.shared.api.ApiResult;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,6 +22,7 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -33,6 +35,7 @@ class MedicalItemController {
   private final MedicalItemService medicalItemService;
 
   @PostMapping
+  @AdminOnly
   @Operation(summary = "Tạo một hạng mục y tế")
   @ApiResponse(responseCode = "201", description = "Đã tạo; header Location trỏ tới tài nguyên mới")
   @ApiResponse(
@@ -48,6 +51,7 @@ class MedicalItemController {
   }
 
   @PostMapping("/batch")
+  @AdminOnly
   @Operation(
       summary = "Tạo nhiều hạng mục y tế một lần",
       description =
@@ -66,6 +70,7 @@ class MedicalItemController {
   }
 
   @PutMapping("/{publicId}")
+  @AdminOnly
   @Operation(
       summary = "Cập nhật hạng mục y tế",
       description =
@@ -87,6 +92,7 @@ class MedicalItemController {
   }
 
   @DeleteMapping("/{publicId}")
+  @AdminOnly
   @Operation(
       summary = "Ngưng hoạt động hạng mục y tế (xóa mềm)",
       description =
@@ -104,6 +110,7 @@ class MedicalItemController {
   }
 
   @PostMapping("/{publicId}/activate")
+  @AdminOnly
   @Operation(
       summary = "Kích hoạt lại hạng mục y tế đã ngưng",
       description =
@@ -119,6 +126,7 @@ class MedicalItemController {
   }
 
   @GetMapping
+  @PreAuthorize("isAuthenticated()")
   @Operation(
       summary = "Tìm kiếm / danh sách hạng mục y tế (phân trang)",
       description =
