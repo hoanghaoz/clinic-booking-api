@@ -349,6 +349,17 @@ class PatientServiceTest {
   }
 
   @Test
+  void checkCardValidity_shouldRoundDaysUp_whenPartOfADayRemains() {
+    UUID publicId = UUID.randomUUID();
+    Patient patient =
+        patientWithCard(
+            7L, NOW.minus(Duration.ofDays(100)), NOW.plus(Duration.ofDays(10)).plusSeconds(60));
+    when(patientRepository.findByPublicId(publicId)).thenReturn(Optional.of(patient));
+
+    assertThat(patientService.checkCardValidity(publicId, STAFF).daysRemaining()).isEqualTo(11);
+  }
+
+  @Test
   void checkCardValidity_shouldReportRevoked_evenWhenNotExpired() {
     UUID publicId = UUID.randomUUID();
     Patient patient =
@@ -530,6 +541,179 @@ class PatientServiceTest {
     patientService.update(publicId, request, PATIENT);
 
     assertThat(patient.getPhone()).isEqualTo("0987654321");
+  }
+
+  // ---- profile ----
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"MEDICAL_STAFF", "DOCTOR", "ADMIN"})
+  void getProfile_shouldReturnAnyPatient_whenActorIsNotPatient(UserRole role) {
+    UUID publicId = UUID.randomUUID();
+    when(patientRepository.findByPublicId(publicId)).thenReturn(Optional.of(patient(7L)));
+
+    PatientResponse response = patientService.getProfile(publicId, new PatientActor(5L, role));
+
+    assertThat(response.fullName()).isEqualTo("Nguyễn Văn A");
+  }
+
+  @Test
+  void getProfile_shouldReturnOwnProfile_whenPatient() {
+    UUID publicId = UUID.randomUUID();
+    when(patientRepository.findByPublicId(publicId)).thenReturn(Optional.of(patient(7L)));
+
+    assertThat(patientService.getProfile(publicId, PATIENT).identityNumber())
+        .isEqualTo("079123456789");
+  }
+
+  @Test
+  void getProfile_shouldThrowForbidden_whenPatientOpensSomeoneElse() {
+    UUID publicId = UUID.randomUUID();
+    when(patientRepository.findByPublicId(publicId)).thenReturn(Optional.of(patient(7L)));
+
+    assertThatThrownBy(() -> patientService.getProfile(publicId, OTHER_PATIENT))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
+  }
+
+  @Test
+  void getProfile_shouldThrowForbidden_whenCompany() {
+    assertThatThrownBy(
+            () ->
+                patientService.getProfile(
+                    UUID.randomUUID(), new PatientActor(30L, UserRole.COMPANY)))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
+    verify(patientRepository, never()).findByPublicId(any());
+  }
+
+  @Test
+  void getProfile_shouldThrowNotFound_whenMissing() {
+    UUID publicId = UUID.randomUUID();
+    when(patientRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> patientService.getProfile(publicId, STAFF))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_NOT_FOUND));
+  }
+
+  @Test
+  void getMyProfile_shouldReturnProfileLinkedToAccount() {
+    when(patientRepository.findByUserId(7L)).thenReturn(Optional.of(patient(7L)));
+
+    assertThat(patientService.getMyProfile(PATIENT).fullName()).isEqualTo("Nguyễn Văn A");
+  }
+
+  @Test
+  void getMyProfile_shouldThrowNotFound_whenAccountHasNoProfile() {
+    when(patientRepository.findByUserId(7L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> patientService.getMyProfile(PATIENT))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_NOT_FOUND));
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"MEDICAL_STAFF", "DOCTOR", "ADMIN", "COMPANY"})
+  void getMyProfile_shouldThrowForbidden_whenNotPatient(UserRole role) {
+    assertThatThrownBy(() -> patientService.getMyProfile(new PatientActor(5L, role)))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
+    verify(patientRepository, never()).findByUserId(any());
+  }
+
+  // ---- change class ----
+
+  @Test
+  void changeClass_shouldMovePatientToVip_whenAdmin() {
+    UUID publicId = UUID.randomUUID();
+    Patient patient = patient(7L);
+    when(patientRepository.findByPublicId(publicId)).thenReturn(Optional.of(patient));
+    when(patientRepository.saveAndFlush(patient)).thenReturn(patient);
+
+    PatientResponse response =
+        patientService.changeClass(
+            publicId, new PatientDtos.PatientClassUpdateRequest(PatientClass.VIP), ADMIN);
+
+    assertThat(patient.getPatientClass()).isEqualTo(PatientClass.VIP);
+    assertThat(response.patientClass()).isEqualTo(PatientClass.VIP);
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"PATIENT", "MEDICAL_STAFF", "DOCTOR", "COMPANY"})
+  void changeClass_shouldThrowForbidden_whenNotAdmin(UserRole role) {
+    assertThatThrownBy(
+            () ->
+                patientService.changeClass(
+                    UUID.randomUUID(),
+                    new PatientDtos.PatientClassUpdateRequest(PatientClass.VIP),
+                    new PatientActor(5L, role)))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
+    verify(patientRepository, never()).findByPublicId(any());
+  }
+
+  @Test
+  void changeClass_shouldFailValidation_whenTargetIsCompany() {
+    assertThatThrownBy(
+            () ->
+                patientService.changeClass(
+                    UUID.randomUUID(),
+                    new PatientDtos.PatientClassUpdateRequest(PatientClass.COMPANY),
+                    ADMIN))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> {
+              assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.VALIDATION_ERROR);
+              assertThat(e.getViolations())
+                  .extracting(violation -> violation.field())
+                  .containsExactly("patientClass");
+            });
+    verify(patientRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void changeClass_shouldThrowConflict_whenPatientIsCompanyMember() {
+    UUID publicId = UUID.randomUUID();
+    Patient patient = patient(7L);
+    patient.setPatientClass(PatientClass.COMPANY);
+    when(patientRepository.findByPublicId(publicId)).thenReturn(Optional.of(patient));
+
+    assertThatThrownBy(
+            () ->
+                patientService.changeClass(
+                    publicId,
+                    new PatientDtos.PatientClassUpdateRequest(PatientClass.PERSONAL),
+                    ADMIN))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_CLASS_LOCKED));
+    assertThat(patient.getPatientClass()).isEqualTo(PatientClass.COMPANY);
+  }
+
+  @Test
+  void changeClass_shouldThrowNotFound_whenPatientMissing() {
+    UUID publicId = UUID.randomUUID();
+    when(patientRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () ->
+                patientService.changeClass(
+                    publicId, new PatientDtos.PatientClassUpdateRequest(PatientClass.VIP), ADMIN))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_NOT_FOUND));
   }
 
   // ---- helpers ----

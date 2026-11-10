@@ -12,7 +12,9 @@ enum PatientErrorCode implements ErrorCode {
   PATIENT_IDENTITY_EXISTS(HttpStatus.CONFLICT),
   /** The patient has no card (legacy rows only; new profiles always get one). */
   PATIENT_CARD_NOT_FOUND(HttpStatus.NOT_FOUND),
-  PATIENT_MEDICAL_HISTORY_NOT_FOUND(HttpStatus.NOT_FOUND);
+  PATIENT_MEDICAL_HISTORY_NOT_FOUND(HttpStatus.NOT_FOUND),
+  /** A COMPANY patient belongs to a corporate contract, so its class is not changed manually. */
+  PATIENT_CLASS_LOCKED(HttpStatus.CONFLICT);
 
   private final HttpStatus status;
 

@@ -6,21 +6,24 @@ import static com.se100.clinic.patient.PatientAccess.requireRole;
 import com.se100.clinic.auth.enums.UserRole;
 import com.se100.clinic.patient.PatientDtos.PatientCardResponse;
 import com.se100.clinic.patient.PatientDtos.PatientCardValidityResponse;
+import com.se100.clinic.patient.PatientDtos.PatientClassUpdateRequest;
 import com.se100.clinic.patient.PatientDtos.PatientCreateRequest;
 import com.se100.clinic.patient.PatientDtos.PatientResponse;
 import com.se100.clinic.patient.PatientDtos.PatientUpdateRequest;
 import com.se100.clinic.patient.enums.PatientCardStatus;
+import com.se100.clinic.patient.enums.PatientClass;
 import com.se100.clinic.shared.error.BusinessException;
 import com.se100.clinic.shared.error.CommonErrorCode;
 import com.se100.clinic.shared.error.ConflictException;
 import com.se100.clinic.shared.error.DbErrors;
+import com.se100.clinic.shared.error.FieldViolation;
 import com.se100.clinic.shared.error.NotFoundException;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
-import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -56,6 +59,7 @@ public class PatientService {
   /** A valid card expiring within this many days is reported as EXPIRING_SOON. */
   static final long EXPIRING_SOON_DAYS = 30;
 
+  private static final long SECONDS_PER_DAY = 86_400;
   private static final String CARD_PREFIX = "BN";
   private static final String CARD_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   private static final int CARD_SUFFIX_LENGTH = 8;
@@ -69,7 +73,9 @@ public class PatientService {
   private static final Set<UserRole> WRITE_ROLES = Set.of(UserRole.PATIENT, UserRole.MEDICAL_STAFF);
   private static final Set<UserRole> CARD_READ_ROLES =
       Set.of(UserRole.PATIENT, UserRole.MEDICAL_STAFF, UserRole.ADMIN);
-  // Everyone except COMPANY may look patients up.
+  private static final Set<UserRole> PATIENT_ONLY = Set.of(UserRole.PATIENT);
+  private static final Set<UserRole> ADMIN_ONLY = Set.of(UserRole.ADMIN);
+  // Everyone except COMPANY may look patients up (and open a single profile).
   private static final Set<UserRole> SEARCH_ROLES =
       Set.of(UserRole.PATIENT, UserRole.DOCTOR, UserRole.MEDICAL_STAFF, UserRole.ADMIN);
 
@@ -121,6 +127,59 @@ public class PatientService {
     } catch (DataIntegrityViolationException e) {
       throw translateUniqueViolation(e);
     }
+  }
+
+  /** One profile by public id. A PATIENT only sees their own; COMPANY gets 403. */
+  @Transactional(readOnly = true)
+  public PatientResponse getProfile(UUID publicId, PatientActor actor) {
+    return PatientResponse.from(loadForActor(publicId, actor, SEARCH_ROLES));
+  }
+
+  /** The profile linked to the calling PATIENT account. */
+  @Transactional(readOnly = true)
+  public PatientResponse getMyProfile(PatientActor actor) {
+    requireRole(actor, PATIENT_ONLY);
+    return patientRepository
+        .findByUserId(actor.userId())
+        .map(PatientResponse::from)
+        .orElseThrow(
+            () ->
+                new NotFoundException(
+                    PatientErrorCode.PATIENT_NOT_FOUND, "Tài khoản chưa có hồ sơ bệnh nhân"));
+  }
+
+  /**
+   * ADMIN-only: moves a patient between PERSONAL and VIP. COMPANY is owned by the company module,
+   * so it can neither be assigned here nor be changed away from manually.
+   */
+  @Transactional
+  public PatientResponse changeClass(
+      UUID publicId, PatientClassUpdateRequest request, PatientActor actor) {
+    requireRole(actor, ADMIN_ONLY);
+    if (request.patientClass() == PatientClass.COMPANY) {
+      throw new BusinessException(
+          CommonErrorCode.VALIDATION_ERROR,
+          "Dữ liệu không hợp lệ",
+          List.of(
+              new FieldViolation(
+                  "patientClass",
+                  "Hạng COMPANY do hợp đồng doanh nghiệp quản lý, không gán thủ công")));
+    }
+    Patient patient =
+        patientRepository
+            .findByPublicId(publicId)
+            .orElseThrow(
+                () ->
+                    new NotFoundException(
+                        PatientErrorCode.PATIENT_NOT_FOUND, "Không tìm thấy bệnh nhân"));
+    if (patient.getPatientClass() == PatientClass.COMPANY) {
+      throw new ConflictException(
+          PatientErrorCode.PATIENT_CLASS_LOCKED,
+          "Bệnh nhân thuộc hợp đồng doanh nghiệp, không đổi hạng thủ công");
+    }
+    patient.setPatientClass(request.patientClass());
+    // saveAndFlush so the returned updatedAt is the new value, not the stale one.
+    return PatientResponse.from(patientRepository.saveAndFlush(patient));
   }
 
   /**
@@ -193,9 +252,15 @@ public class PatientService {
     Instant now = clock.instant();
     PatientCardStatus status = cardStatus(patient, now);
     boolean valid = status == PatientCardStatus.ACTIVE || status == PatientCardStatus.EXPIRING_SOON;
-    long daysRemaining = valid ? ChronoUnit.DAYS.between(now, patient.getCardExpiresAt()) : 0;
+    long daysRemaining = valid ? daysLeft(now, patient.getCardExpiresAt()) : 0;
     return new PatientCardValidityResponse(
         status, valid, daysRemaining, patient.getCardExpiresAt());
+  }
+
+  /** Whole days left, rounded up: a card activated just now has 365 days, not 364. */
+  private static long daysLeft(Instant now, Instant expiresAt) {
+    long seconds = Duration.between(now, expiresAt).getSeconds();
+    return (seconds + SECONDS_PER_DAY - 1) / SECONDS_PER_DAY;
   }
 
   /** Revoked wins over expired; "expiring soon" is a valid card inside the reminder window. */

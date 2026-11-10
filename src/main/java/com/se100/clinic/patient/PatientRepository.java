@@ -18,6 +18,8 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
   Page<Patient> findByIdentityNumberAndUserId(
       String identityNumber, Long userId, Pageable pageable);
 
+  Optional<Patient> findByUserId(Long userId);
+
   boolean existsByUserId(Long userId);
 
   boolean existsByIdentityTypeAndIdentityIssuerAndIdentityNumber(

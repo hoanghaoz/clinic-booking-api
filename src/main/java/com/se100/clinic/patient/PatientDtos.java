@@ -77,7 +77,9 @@ public final class PatientDtos {
   public record PatientCardValidityResponse(
       PatientCardStatus status,
       @Schema(description = "true khi thẻ còn dùng được (ACTIVE hoặc EXPIRING_SOON)") boolean valid,
-      @Schema(description = "Số ngày nguyên còn lại đến hạn; 0 khi thẻ đã hết hạn hoặc bị thu hồi")
+      @Schema(
+              description =
+                  "Số ngày còn lại đến hạn (làm tròn lên); 0 khi thẻ đã hết hạn hoặc bị thu hồi")
           long daysRemaining,
       Instant expiresAt) {}
 
