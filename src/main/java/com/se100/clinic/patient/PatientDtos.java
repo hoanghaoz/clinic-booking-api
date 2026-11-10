@@ -1,6 +1,7 @@
 package com.se100.clinic.patient;
 
 import com.se100.clinic.patient.enums.Gender;
+import com.se100.clinic.patient.enums.PatientCardStatus;
 import com.se100.clinic.patient.enums.PatientClass;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -58,6 +59,27 @@ public final class PatientDtos {
           String phone,
       @Email(message = "Email không hợp lệ") @Size(max = 254) String contactEmail,
       @NotBlank(message = "Địa chỉ không được để trống") String address) {}
+
+  // ADMIN-only. Only PERSONAL and VIP are assignable here; COMPANY is owned by the company module
+  // and the future service must reject it.
+  public record PatientClassUpdateRequest(
+      @NotNull(message = "Hạng bệnh nhân không được để trống") PatientClass patientClass) {}
+
+  @Schema(requiredProperties = {"cardNumber", "activatedAt", "expiresAt", "status"})
+  public record PatientCardResponse(
+      String cardNumber,
+      Instant activatedAt,
+      Instant expiresAt,
+      Instant revokedAt,
+      PatientCardStatus status) {}
+
+  @Schema(requiredProperties = {"status", "valid", "daysRemaining", "expiresAt"})
+  public record PatientCardValidityResponse(
+      PatientCardStatus status,
+      @Schema(description = "true khi thẻ còn dùng được (ACTIVE hoặc EXPIRING_SOON)") boolean valid,
+      @Schema(description = "Số ngày nguyên còn lại đến hạn; 0 khi thẻ đã hết hạn hoặc bị thu hồi")
+          long daysRemaining,
+      Instant expiresAt) {}
 
   // requiredProperties: always-present fields, so the generated TypeScript type is not optional.
   @Schema(
