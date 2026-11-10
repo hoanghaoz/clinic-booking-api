@@ -2,6 +2,7 @@ package com.se100.clinic.doctor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.se100.clinic.AbstractAdminIntegrationTest;
 import com.se100.clinic.AbstractIntegrationTest;
 import com.se100.clinic.doctor.SpecialtyDtos.CreateSpecialtyRequest;
 import com.se100.clinic.doctor.SpecialtyDtos.SpecialtyResponse;
@@ -24,7 +25,7 @@ import org.springframework.http.ResponseEntity;
  * <p>The DB is shared between tests (see {@link AbstractIntegrationTest}), so every test tags its
  * data with a fresh {@code tag} and filters list calls by it ({@code keyword=<tag>}).
  */
-class SpecialtyControllerIntegrationTest extends AbstractIntegrationTest {
+class SpecialtyControllerIntegrationTest extends AbstractAdminIntegrationTest {
 
   private static final String BASE = "/api/v1/specialties";
 
