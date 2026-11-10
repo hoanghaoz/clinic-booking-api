@@ -18,11 +18,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,15 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class PatientService {
+
+  /**
+   * Fields the patient lookups may be sorted by. They are API field names AND entity property names
+   * (keep them identical).
+   */
+  public static final Set<String> SORTABLE_FIELDS = Set.of("fullName", "dateOfBirth", "createdAt");
+
+  /** Used when the client sends no {@code sort}. */
+  public static final Sort DEFAULT_SORT = Sort.by("fullName");
 
   /** Card validity from activation, per docs/de-tai.md section C. */
   static final int CARD_VALID_YEARS = 1;
@@ -127,36 +138,38 @@ public class PatientService {
   }
 
   /**
-   * Exact-match lookup by phone number (separators in the input are ignored). A PATIENT only ever
-   * sees their own profile, so others' records are neither returned nor revealed; every other
-   * allowed role gets all profiles sharing the number, since a phone is not unique.
+   * Exact-match lookup by phone number (separators in the input are ignored), one page at a time. A
+   * PATIENT only ever sees their own profile, so others' records are neither returned nor revealed;
+   * every other allowed role gets all profiles sharing the number, since a phone is not unique.
+   *
+   * @param pageable already validated by {@code PageParams#toPageable}
    */
   @Transactional(readOnly = true)
-  public List<PatientResponse> searchByPhone(String phone, PatientActor actor) {
+  public Page<PatientResponse> searchByPhone(String phone, PatientActor actor, Pageable pageable) {
     requireRole(actor, SEARCH_ROLES);
-    String normalized = requireNotBlank(phone, "Số điện thoại không được để trống");
-    normalized = normalizePhone(normalized);
-    List<Patient> matches =
+    String normalized = normalizePhone(requireNotBlank(phone, "Số điện thoại không được để trống"));
+    Page<Patient> matches =
         actor.role() == UserRole.PATIENT
-            ? patientRepository.findByPhoneAndUserIdOrderByIdAsc(normalized, actor.userId())
-            : patientRepository.findByPhoneOrderByIdAsc(normalized);
-    return matches.stream().map(PatientResponse::from).toList();
+            ? patientRepository.findByPhoneAndUserId(normalized, actor.userId(), pageable)
+            : patientRepository.findByPhone(normalized, pageable);
+    return matches.map(PatientResponse::from);
   }
 
   /**
-   * Exact-match lookup by identity document number (CCCD / passport), same visibility rules as
-   * {@link #searchByPhone}. The number alone is not unique (the key also has type and issuer).
+   * Exact-match lookup by identity document number (CCCD / passport), same visibility rules and
+   * paging as {@link #searchByPhone}. The number alone is not unique (the key also has type and
+   * issuer).
    */
   @Transactional(readOnly = true)
-  public List<PatientResponse> searchByIdentityNumber(String identityNumber, PatientActor actor) {
+  public Page<PatientResponse> searchByIdentityNumber(
+      String identityNumber, PatientActor actor, Pageable pageable) {
     requireRole(actor, SEARCH_ROLES);
     String normalized = requireNotBlank(identityNumber, "Số giấy tờ không được để trống");
-    List<Patient> matches =
+    Page<Patient> matches =
         actor.role() == UserRole.PATIENT
-            ? patientRepository.findByIdentityNumberAndUserIdOrderByIdAsc(
-                normalized, actor.userId())
-            : patientRepository.findByIdentityNumberOrderByIdAsc(normalized);
-    return matches.stream().map(PatientResponse::from).toList();
+            ? patientRepository.findByIdentityNumberAndUserId(normalized, actor.userId(), pageable)
+            : patientRepository.findByIdentityNumber(normalized, pageable);
+    return matches.map(PatientResponse::from);
   }
 
   @Transactional(readOnly = true)

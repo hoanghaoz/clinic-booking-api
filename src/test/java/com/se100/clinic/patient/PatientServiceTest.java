@@ -40,6 +40,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 /** Pure unit test: no Spring context, no database. */
 @ExtendWith(MockitoExtension.class)
@@ -360,64 +365,84 @@ class PatientServiceTest {
 
   // ---- search ----
 
+  private static final Pageable PAGE =
+      PageRequest.of(0, 20, PatientService.DEFAULT_SORT.and(Sort.by("id")));
+
   @ParameterizedTest
   @EnumSource(
       value = UserRole.class,
       names = {"MEDICAL_STAFF", "DOCTOR", "ADMIN"})
   void searchByPhone_shouldReturnEveryMatch_whenActorIsNotPatient(UserRole role) {
-    when(patientRepository.findByPhoneOrderByIdAsc("0901234567"))
-        .thenReturn(List.of(patient(7L), patient(null)));
+    when(patientRepository.findByPhone("0901234567", PAGE))
+        .thenReturn(new PageImpl<>(List.of(patient(7L), patient(null)), PAGE, 2));
 
-    List<PatientResponse> result =
-        patientService.searchByPhone("0901234567", new PatientActor(5L, role));
+    Page<PatientResponse> result =
+        patientService.searchByPhone("0901234567", new PatientActor(5L, role), PAGE);
 
-    assertThat(result).hasSize(2);
-    verify(patientRepository, never()).findByPhoneAndUserIdOrderByIdAsc(any(), any());
+    assertThat(result.getContent()).hasSize(2);
+    assertThat(result.getTotalElements()).isEqualTo(2);
+    verify(patientRepository, never()).findByPhoneAndUserId(any(), any(), any());
+  }
+
+  @Test
+  void searchByPhone_shouldPassPageableThrough_soPagingAndSortingApply() {
+    Pageable second =
+        PageRequest.of(1, 1, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.asc("id")));
+    when(patientRepository.findByPhone("0901234567", second))
+        .thenReturn(new PageImpl<>(List.of(patient(null)), second, 3));
+
+    Page<PatientResponse> result = patientService.searchByPhone("0901234567", STAFF, second);
+
+    assertThat(result.getNumber()).isEqualTo(1);
+    assertThat(result.getSize()).isEqualTo(1);
+    assertThat(result.getTotalElements()).isEqualTo(3);
+    assertThat(result.getTotalPages()).isEqualTo(3);
   }
 
   @Test
   void searchByPhone_shouldOnlyQueryOwnRecord_whenActorIsPatient() {
-    when(patientRepository.findByPhoneAndUserIdOrderByIdAsc("0901234567", 7L))
-        .thenReturn(List.of(patient(7L)));
+    when(patientRepository.findByPhoneAndUserId("0901234567", 7L, PAGE))
+        .thenReturn(new PageImpl<>(List.of(patient(7L)), PAGE, 1));
 
-    List<PatientResponse> result = patientService.searchByPhone("0901234567", PATIENT);
+    Page<PatientResponse> result = patientService.searchByPhone("0901234567", PATIENT, PAGE);
 
-    assertThat(result).hasSize(1);
-    verify(patientRepository, never()).findByPhoneOrderByIdAsc(any());
+    assertThat(result.getContent()).hasSize(1);
+    verify(patientRepository, never()).findByPhone(any(), any());
   }
 
   @Test
   void searchByPhone_shouldReturnEmpty_whenPatientSearchesSomeoneElsesNumber() {
-    when(patientRepository.findByPhoneAndUserIdOrderByIdAsc("0911111111", 7L))
-        .thenReturn(List.of());
+    when(patientRepository.findByPhoneAndUserId("0911111111", 7L, PAGE))
+        .thenReturn(Page.empty(PAGE));
 
-    assertThat(patientService.searchByPhone("0911111111", PATIENT)).isEmpty();
+    assertThat(patientService.searchByPhone("0911111111", PATIENT, PAGE).getContent()).isEmpty();
   }
 
   @Test
   void searchByPhone_shouldStripSeparators_beforeLookup() {
-    when(patientRepository.findByPhoneOrderByIdAsc("+84901234567")).thenReturn(List.of());
+    when(patientRepository.findByPhone("+84901234567", PAGE)).thenReturn(Page.empty(PAGE));
 
-    assertThat(patientService.searchByPhone(" +84 901-234.567 ", STAFF)).isEmpty();
-    verify(patientRepository).findByPhoneOrderByIdAsc("+84901234567");
+    assertThat(patientService.searchByPhone(" +84 901-234.567 ", STAFF, PAGE).getContent())
+        .isEmpty();
+    verify(patientRepository).findByPhone("+84901234567", PAGE);
   }
 
   @Test
   void searchByPhone_shouldThrowForbidden_whenCompany() {
     var company = new PatientActor(30L, UserRole.COMPANY);
 
-    assertThatThrownBy(() -> patientService.searchByPhone("0901234567", company))
+    assertThatThrownBy(() -> patientService.searchByPhone("0901234567", company, PAGE))
         .isInstanceOfSatisfying(
             BusinessException.class,
             e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
-    verify(patientRepository, never()).findByPhoneOrderByIdAsc(any());
+    verify(patientRepository, never()).findByPhone(any(), any());
   }
 
   @ParameterizedTest
   @NullAndEmptySource
   @ValueSource(strings = {"   "})
   void searchByPhone_shouldThrowInvalidRequest_whenBlank(String phone) {
-    assertThatThrownBy(() -> patientService.searchByPhone(phone, STAFF))
+    assertThatThrownBy(() -> patientService.searchByPhone(phone, STAFF, PAGE))
         .isInstanceOfSatisfying(
             BusinessException.class,
             e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_REQUEST));
@@ -428,40 +453,41 @@ class PatientServiceTest {
       value = UserRole.class,
       names = {"MEDICAL_STAFF", "DOCTOR", "ADMIN"})
   void searchByIdentityNumber_shouldReturnEveryMatch_whenActorIsNotPatient(UserRole role) {
-    when(patientRepository.findByIdentityNumberOrderByIdAsc("079123456789"))
-        .thenReturn(List.of(patient(7L)));
+    when(patientRepository.findByIdentityNumber("079123456789", PAGE))
+        .thenReturn(new PageImpl<>(List.of(patient(7L)), PAGE, 1));
 
-    List<PatientResponse> result =
-        patientService.searchByIdentityNumber(" 079123456789 ", new PatientActor(5L, role));
+    Page<PatientResponse> result =
+        patientService.searchByIdentityNumber(" 079123456789 ", new PatientActor(5L, role), PAGE);
 
-    assertThat(result).hasSize(1);
-    assertThat(result.getFirst().identityNumber()).isEqualTo("079123456789");
-    verify(patientRepository, never()).findByIdentityNumberAndUserIdOrderByIdAsc(any(), any());
+    assertThat(result.getContent()).hasSize(1);
+    assertThat(result.getContent().getFirst().identityNumber()).isEqualTo("079123456789");
+    verify(patientRepository, never()).findByIdentityNumberAndUserId(any(), any(), any());
   }
 
   @Test
   void searchByIdentityNumber_shouldOnlyQueryOwnRecord_whenActorIsPatient() {
-    when(patientRepository.findByIdentityNumberAndUserIdOrderByIdAsc("079123456789", 7L))
-        .thenReturn(List.of(patient(7L)));
+    when(patientRepository.findByIdentityNumberAndUserId("079123456789", 7L, PAGE))
+        .thenReturn(new PageImpl<>(List.of(patient(7L)), PAGE, 1));
 
-    assertThat(patientService.searchByIdentityNumber("079123456789", PATIENT)).hasSize(1);
-    verify(patientRepository, never()).findByIdentityNumberOrderByIdAsc(any());
+    assertThat(patientService.searchByIdentityNumber("079123456789", PATIENT, PAGE).getContent())
+        .hasSize(1);
+    verify(patientRepository, never()).findByIdentityNumber(any(), any());
   }
 
   @Test
   void searchByIdentityNumber_shouldThrowForbidden_whenCompany() {
     var company = new PatientActor(30L, UserRole.COMPANY);
 
-    assertThatThrownBy(() -> patientService.searchByIdentityNumber("079123456789", company))
+    assertThatThrownBy(() -> patientService.searchByIdentityNumber("079123456789", company, PAGE))
         .isInstanceOfSatisfying(
             BusinessException.class,
             e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
-    verify(patientRepository, never()).findByIdentityNumberOrderByIdAsc(any());
+    verify(patientRepository, never()).findByIdentityNumber(any(), any());
   }
 
   @Test
   void searchByIdentityNumber_shouldThrowInvalidRequest_whenBlank() {
-    assertThatThrownBy(() -> patientService.searchByIdentityNumber("  ", STAFF))
+    assertThatThrownBy(() -> patientService.searchByIdentityNumber("  ", STAFF, PAGE))
         .isInstanceOfSatisfying(
             BusinessException.class,
             e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_REQUEST));

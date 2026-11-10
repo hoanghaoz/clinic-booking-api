@@ -1,20 +1,22 @@
 package com.se100.clinic.patient;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PatientRepository extends JpaRepository<Patient, Long> {
   Optional<Patient> findByPublicId(UUID publicId);
 
-  List<Patient> findByPhoneOrderByIdAsc(String phone);
+  Page<Patient> findByPhone(String phone, Pageable pageable);
 
-  List<Patient> findByPhoneAndUserIdOrderByIdAsc(String phone, Long userId);
+  Page<Patient> findByPhoneAndUserId(String phone, Long userId, Pageable pageable);
 
-  List<Patient> findByIdentityNumberOrderByIdAsc(String identityNumber);
+  Page<Patient> findByIdentityNumber(String identityNumber, Pageable pageable);
 
-  List<Patient> findByIdentityNumberAndUserIdOrderByIdAsc(String identityNumber, Long userId);
+  Page<Patient> findByIdentityNumberAndUserId(
+      String identityNumber, Long userId, Pageable pageable);
 
   boolean existsByUserId(Long userId);
 
