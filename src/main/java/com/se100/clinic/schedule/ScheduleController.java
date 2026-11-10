@@ -14,6 +14,7 @@ import com.se100.clinic.schedule.ScheduleDtos.SlotResponse;
 import com.se100.clinic.schedule.enums.ScheduleStatus;
 import com.se100.clinic.shared.PageParams;
 import com.se100.clinic.shared.annotation.AdminOnly;
+import com.se100.clinic.shared.annotation.DoctorOnly;
 import com.se100.clinic.shared.api.ApiResult;
 import com.se100.clinic.shared.error.BusinessException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -85,7 +86,7 @@ class ScheduleController {
   }
 
   @GetMapping("/my")
-  @PreAuthorize("hasRole('DOCTOR')")
+  @DoctorOnly
   @Operation(summary = "Bác sĩ xem ca và phòng được phân công của mình")
   ApiResult<List<ScheduleResponse>> mySchedules(
       Authentication authentication,
@@ -101,7 +102,7 @@ class ScheduleController {
   }
 
   @GetMapping("/my/{publicId}/patients")
-  @PreAuthorize("hasRole('DOCTOR')")
+  @DoctorOnly
   @Operation(summary = "Bác sĩ xem bệnh nhân trong ca theo thứ tự tiếp nhận")
   ApiResult<DoctorQueueResponse> myPatients(
       Authentication authentication, @PathVariable UUID publicId) {
