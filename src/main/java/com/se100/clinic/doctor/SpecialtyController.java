@@ -4,6 +4,7 @@ import com.se100.clinic.doctor.SpecialtyDtos.CreateSpecialtyRequest;
 import com.se100.clinic.doctor.SpecialtyDtos.SpecialtyResponse;
 import com.se100.clinic.doctor.SpecialtyDtos.UpdateSpecialtyRequest;
 import com.se100.clinic.shared.PageParams;
+import com.se100.clinic.shared.annotation.AdminOnly;
 import com.se100.clinic.shared.api.ApiDocs;
 import com.se100.clinic.shared.api.ApiResult;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,6 +56,7 @@ class SpecialtyController {
   }
 
   @PostMapping
+  @AdminOnly
   @Operation(summary = "Tạo chuyên khoa")
   @ApiResponse(responseCode = "201", description = "Đã tạo; header Location trỏ tới tài nguyên mới")
   @ApiResponse(
@@ -101,6 +103,7 @@ class SpecialtyController {
   }
 
   @PutMapping("/{id}")
+  @AdminOnly
   @Operation(summary = "Cập nhật tên/mô tả chuyên khoa (mã không đổi được)")
   @ApiResponse(
       responseCode = "404",
@@ -113,6 +116,7 @@ class SpecialtyController {
   }
 
   @DeleteMapping("/{id}")
+  @AdminOnly
   @Operation(summary = "Ngưng hoạt động chuyên khoa (xoá mềm)")
   @ApiResponse(responseCode = "204", description = "Thành công, KHÔNG có body")
   @ApiResponse(

@@ -124,7 +124,7 @@ class PatientMappingTest {
         .contains(List.of("identity_type", "identity_issuer", "identity_number"));
     assertThat(table.getIndexes().values())
         .extracting(index -> index.getSelectables().stream().map(Selectable::getText).toList())
-        .containsExactly(List.of("phone"));
+        .containsExactlyInAnyOrder(List.of("phone"), List.of("identity_number"));
     assertThat(column(table, "class").getDefaultValue()).isEqualTo("'PERSONAL'");
     assertThat(((BasicValue) patient.getProperty("patientClass").getValue()).getEnumeratedType())
         .isEqualTo(EnumType.STRING);
