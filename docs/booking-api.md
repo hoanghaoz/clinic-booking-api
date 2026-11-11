@@ -26,8 +26,8 @@ Khi chỉ tìm theo bác sĩ/chuyên khoa, `durationMinutes` nhận 20 hoặc 30
 20. Tìm giờ theo bác sĩ/chuyên khoa vẫn cần chọn một dịch vụ lẻ hoặc gói khi xác nhận.
 
 Kết quả phân trang theo ca. Mỗi ca có `schedule`, `windows`, `full` và
-thông tin giá/phiên bản khi đã chọn gói/dịch vụ. Bệnh nhân cá nhân (`PERSONAL`
-hoặc `NORMAL`) chỉ thấy ngày đến hết ngày thứ 30 tính từ ngày hiện tại.
+thông tin giá/phiên bản khi đã chọn gói/dịch vụ. Bệnh nhân cá nhân (`PERSONAL`)
+chỉ thấy ngày đến hết ngày thứ 30 tính từ ngày hiện tại.
 
 Gói nhận đặt lịch khi có phiên bản đang hiệu lực, trạng thái `OPENING` hoặc
 `DISCOUNT`, thời lượng 20/30 phút và ít nhất một chuyên khoa đã cấu hình.

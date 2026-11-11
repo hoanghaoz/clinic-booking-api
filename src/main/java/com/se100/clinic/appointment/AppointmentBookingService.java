@@ -312,7 +312,7 @@ public class AppointmentBookingService {
 
   private LocalDate lastBookableDate(BookingProfile patient, Instant now) {
     return switch (patient.patientClass()) {
-      case PERSONAL, NORMAL -> now.atZone(zone).toLocalDate().plusDays(PERSONAL_ADVANCE_DAYS);
+      case PERSONAL -> now.atZone(zone).toLocalDate().plusDays(PERSONAL_ADVANCE_DAYS);
       case VIP, COMPANY -> LocalDate.MAX;
     };
   }
