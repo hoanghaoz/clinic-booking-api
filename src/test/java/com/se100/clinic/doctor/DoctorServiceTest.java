@@ -295,4 +295,28 @@ class DoctorServiceTest {
         DoctorErrorCode.DOCTOR_SPECIALTY_NOT_ASSIGNED,
         () -> doctorService.requireAssignable(1L, 2L));
   }
+
+  @Test
+  void findWorkingDoctorIdByUserId_shouldReturnId_whenDoctorIsWorking() {
+    Doctor existing = doctor(1);
+    when(doctorRepository.findByUserId(11L)).thenReturn(Optional.of(existing));
+
+    assertThat(doctorService.findWorkingDoctorIdByUserId(11L)).contains(1L);
+  }
+
+  @Test
+  void findWorkingDoctorIdByUserId_shouldReturnEmpty_whenDoctorNotWorking() {
+    Doctor existing = doctor(1);
+    existing.setStatus(EmployeeStatus.NOT_WORKING);
+    when(doctorRepository.findByUserId(11L)).thenReturn(Optional.of(existing));
+
+    assertThat(doctorService.findWorkingDoctorIdByUserId(11L)).isEmpty();
+  }
+
+  @Test
+  void findWorkingDoctorIdByUserId_shouldReturnEmpty_whenAccountIsNotADoctor() {
+    when(doctorRepository.findByUserId(99L)).thenReturn(Optional.empty());
+
+    assertThat(doctorService.findWorkingDoctorIdByUserId(99L)).isEmpty();
+  }
 }

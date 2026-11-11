@@ -6,6 +6,7 @@ import com.se100.clinic.doctor.DoctorDtos.UpdateDoctorRequest;
 import com.se100.clinic.doctor.DoctorDtos.UpdateDoctorStatusRequest;
 import com.se100.clinic.employee.enums.EmployeeStatus;
 import com.se100.clinic.shared.PageParams;
+import com.se100.clinic.shared.annotation.AdminOnly;
 import com.se100.clinic.shared.api.ApiDocs;
 import com.se100.clinic.shared.api.ApiResult;
 import io.swagger.v3.oas.annotations.Operation;
@@ -48,6 +49,7 @@ class DoctorController {
   }
 
   @PostMapping
+  @AdminOnly
   @Operation(
       summary = "Tạo hồ sơ bác sĩ",
       description =
@@ -109,6 +111,7 @@ class DoctorController {
   }
 
   @PutMapping("/{id}")
+  @AdminOnly
   @Operation(
       summary = "Cập nhật họ tên, học vị và danh sách chuyên khoa",
       description =
@@ -131,6 +134,7 @@ class DoctorController {
   }
 
   @PatchMapping("/{id}/status")
+  @AdminOnly
   @Operation(
       summary = "Đổi trạng thái hoạt động (WORKING / NOT_WORKING)",
       description = "Bác sĩ NOT_WORKING không được phân công ca làm việc mới.")

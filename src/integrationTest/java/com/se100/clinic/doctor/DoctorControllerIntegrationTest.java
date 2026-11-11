@@ -2,6 +2,7 @@ package com.se100.clinic.doctor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.se100.clinic.AbstractAdminIntegrationTest;
 import com.se100.clinic.AbstractIntegrationTest;
 import com.se100.clinic.doctor.DoctorDtos.CreateDoctorRequest;
 import com.se100.clinic.doctor.DoctorDtos.DoctorResponse;
@@ -29,7 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * to other (not yet implemented) modules, so they are inserted with plain SQL. Every test tags its
  * data with a fresh {@code tag} (shared DB, see {@link AbstractIntegrationTest}).
  */
-class DoctorControllerIntegrationTest extends AbstractIntegrationTest {
+class DoctorControllerIntegrationTest extends AbstractAdminIntegrationTest {
 
   private static final String BASE = "/api/v1/doctors";
 

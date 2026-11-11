@@ -2,7 +2,7 @@ package com.se100.clinic.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.se100.clinic.AbstractIntegrationTest;
+import com.se100.clinic.AbstractAdminIntegrationTest;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemCreateDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemResponseDto;
 import com.se100.clinic.catalog.CatalogDtos.MedicalItemUpdateDto;
@@ -26,7 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 /** HTTP-level check of updating and soft-deleting medical items. */
-class MedicalItemControllerIntegrationTest extends AbstractIntegrationTest {
+class MedicalItemControllerIntegrationTest extends AbstractAdminIntegrationTest {
 
   private static final String BASE = "/api/v1/medical-items";
 

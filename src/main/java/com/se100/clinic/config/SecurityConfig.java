@@ -9,10 +9,12 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -34,6 +36,22 @@ public class SecurityConfig {
     "/api/v1/auth/logout"
   };
 
+  /** Read-only lookups that guests may call; every write on these paths stays admin-only. */
+  private static final String[] PUBLIC_READ_ENDPOINTS = {
+    "/api/v1/doctors", "/api/v1/doctors/*", "/api/v1/specialties", "/api/v1/specialties/*"
+  };
+
+  private static void securityError(HttpServletResponse response, int status, String code)
+      throws IOException {
+    response.setStatus(status);
+    response.setContentType("application/problem+json");
+    response.setCharacterEncoding("UTF-8");
+    if (status == 401) {
+      response.setHeader("WWW-Authenticate", "Bearer");
+    }
+    response.getWriter().write("{\"status\":" + status + ",\"code\":\"" + code + "\"}");
+  }
+
   @Bean
   @Profile({"dev", "test"})
   public SecurityFilterChain devFilterChain(
@@ -52,7 +70,7 @@ public class SecurityConfig {
   private SecurityFilterChain configure(
       HttpSecurity http, JwtTokenService tokens, AuthenticatedUserService users, boolean production)
       throws Exception {
-    http.csrf(csrf -> csrf.disable())
+    http.csrf(AbstractHttpConfigurer::disable)
         .cors(Customizer.withDefaults())
         .sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -68,6 +86,7 @@ public class SecurityConfig {
               auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
               auth.requestMatchers("/api/v1/appointments", "/api/v1/appointments/**")
                   .authenticated();
+              auth.requestMatchers(HttpMethod.GET, PUBLIC_READ_ENDPOINTS).permitAll();
               if (tokens != null || production) {
                 auth.anyRequest().authenticated();
               } else {
@@ -102,16 +121,5 @@ public class SecurityConfig {
                                   })));
     }
     return http.build();
-  }
-
-  private static void securityError(HttpServletResponse response, int status, String code)
-      throws IOException {
-    response.setStatus(status);
-    response.setContentType("application/problem+json");
-    response.setCharacterEncoding("UTF-8");
-    if (status == 401) {
-      response.setHeader("WWW-Authenticate", "Bearer");
-    }
-    response.getWriter().write("{\"status\":" + status + ",\"code\":\"" + code + "\"}");
   }
 }
