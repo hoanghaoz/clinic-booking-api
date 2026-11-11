@@ -113,6 +113,10 @@ class PatientMappingTest {
     assertThat(column(table, "phone").getLength()).isEqualTo(25L);
     assertThat(column(table, "contact_email").getLength()).isEqualTo(254L);
     assertThat(column(table, "identity_type").getLength()).isEqualTo(20L);
+    var identityType = (BasicValue) patient.getProperty("identityType").getValue();
+    assertThat(identityType.getEnumeratedType()).isEqualTo(EnumType.STRING);
+    assertThat(identityType.getType().getReturnedClass().getName())
+        .isEqualTo("com.se100.clinic.patient.enums.IdentityType");
     assertThat(column(table, "identity_number").getLength()).isEqualTo(40L);
     assertThat(column(table, "identity_issuer").getLength()).isEqualTo(80L);
     assertThat(column(table, "card_number").getLength()).isEqualTo(40L);

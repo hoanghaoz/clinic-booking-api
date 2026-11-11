@@ -20,8 +20,12 @@ import com.se100.clinic.patient.PatientDtos.PatientCardResponse;
 import com.se100.clinic.patient.PatientDtos.PatientCardValidityResponse;
 import com.se100.clinic.patient.PatientDtos.PatientResponse;
 import com.se100.clinic.patient.enums.Gender;
+import com.se100.clinic.patient.enums.IdentityType;
 import com.se100.clinic.patient.enums.PatientCardStatus;
 import com.se100.clinic.patient.enums.PatientClass;
+import com.se100.clinic.shared.error.BusinessException;
+import com.se100.clinic.shared.error.CommonErrorCode;
+import com.se100.clinic.shared.error.FieldViolation;
 import com.se100.clinic.shared.error.GlobalExceptionHandler;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -84,7 +88,7 @@ class PatientControllerTest {
         "0901234567",
         null,
         "Quận 3",
-        "CCCD",
+        IdentityType.CCCD,
         "079123456789",
         "Cục CSQLHC",
         PatientClass.PERSONAL,
@@ -124,6 +128,19 @@ class PatientControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
         .andExpect(jsonPath("$.errors.length()").value(8));
+    verifyNoInteractions(patientService);
+  }
+
+  @Test
+  void create_withUnknownIdentityType_returns400_andNeverCallsService() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/patients")
+                .principal(AUTH)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    CREATE_BODY.replace("\"identityType\":\"CCCD\"", "\"identityType\":\"BLX\"")))
+        .andExpect(status().isBadRequest());
     verifyNoInteractions(patientService);
   }
 
@@ -238,7 +255,15 @@ class PatientControllerTest {
   }
 
   @Test
-  void update_withFutureBirthDate_returns400() throws Exception {
+  void update_withOutOfRangeBirthDate_returns400WithFieldError() throws Exception {
+    // The date range is checked in the service (application clock), not by Bean Validation.
+    when(patientService.update(eq(PUBLIC_ID), any(), eq(ACTOR)))
+        .thenThrow(
+            new BusinessException(
+                CommonErrorCode.VALIDATION_ERROR,
+                "Dữ liệu không hợp lệ",
+                List.of(new FieldViolation("dateOfBirth", "Ngày sinh không hợp lệ"))));
+
     mockMvc
         .perform(
             put("/api/v1/patients/" + PUBLIC_ID)
@@ -250,8 +275,8 @@ class PatientControllerTest {
                      "phone":"0901234567","address":"Quận 3"}
                     """))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    verifyNoInteractions(patientService);
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+        .andExpect(jsonPath("$.errors[0].field").value("dateOfBirth"));
   }
 
   @Test

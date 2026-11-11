@@ -10,6 +10,7 @@ import com.se100.clinic.patient.PatientDtos.PatientClassUpdateRequest;
 import com.se100.clinic.patient.PatientDtos.PatientCreateRequest;
 import com.se100.clinic.patient.PatientDtos.PatientResponse;
 import com.se100.clinic.patient.PatientDtos.PatientUpdateRequest;
+import com.se100.clinic.patient.enums.IdentityType;
 import com.se100.clinic.patient.enums.PatientCardStatus;
 import com.se100.clinic.patient.enums.PatientClass;
 import com.se100.clinic.shared.error.BusinessException;
@@ -22,8 +23,10 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -58,6 +61,9 @@ public class PatientService {
 
   /** A valid card expiring within this many days is reported as EXPIRING_SOON. */
   static final long EXPIRING_SOON_DAYS = 30;
+
+  /** Oldest accepted birth date; anything earlier is a typo. */
+  static final LocalDate EARLIEST_BIRTH_DATE = LocalDate.of(1900, 1, 1);
 
   private static final long SECONDS_PER_DAY = 86_400;
   private static final String CARD_PREFIX = "BN";
@@ -97,6 +103,12 @@ public class PatientService {
   @Transactional
   public PatientResponse create(PatientCreateRequest request, PatientActor actor) {
     requireRole(actor, WRITE_ROLES);
+    requireValidBirthDate(request.dateOfBirth());
+    // Normalize first so the duplicate check and the stored values agree (search trims too).
+    IdentityType identityType = request.identityType();
+    String identityNumber = normalizeIdentityNumber(request.identityNumber());
+    requireValidIdentityNumber(identityType, identityNumber);
+    String identityIssuer = clean(request.identityIssuer());
     Long ownerUserId = null;
     if (actor.role() == UserRole.PATIENT) {
       if (patientRepository.existsByUserId(actor.userId())) {
@@ -105,21 +117,21 @@ public class PatientService {
       ownerUserId = actor.userId();
     }
     if (patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumber(
-        request.identityType(), request.identityIssuer(), request.identityNumber())) {
+        identityType, identityIssuer, identityNumber)) {
       throw identityExists();
     }
 
     Patient patient = new Patient();
     patient.setUserId(ownerUserId);
-    patient.setFullName(request.fullName());
+    patient.setFullName(clean(request.fullName()));
     patient.setDateOfBirth(request.dateOfBirth());
     patient.setGender(request.gender());
     patient.setPhone(normalizePhone(request.phone()));
-    patient.setContactEmail(request.contactEmail());
-    patient.setAddress(request.address());
-    patient.setIdentityType(request.identityType());
-    patient.setIdentityNumber(request.identityNumber());
-    patient.setIdentityIssuer(request.identityIssuer());
+    patient.setContactEmail(cleanOrNull(request.contactEmail()));
+    patient.setAddress(clean(request.address()));
+    patient.setIdentityType(identityType);
+    patient.setIdentityNumber(identityNumber);
+    patient.setIdentityIssuer(identityIssuer);
     issueCard(patient);
     try {
       // saveAndFlush: surface a unique-constraint violation inside this try block, not at commit.
@@ -189,12 +201,13 @@ public class PatientService {
   @Transactional
   public PatientResponse update(UUID publicId, PatientUpdateRequest request, PatientActor actor) {
     Patient patient = loadForActor(publicId, actor, WRITE_ROLES);
-    patient.setFullName(request.fullName());
+    requireValidBirthDate(request.dateOfBirth());
+    patient.setFullName(clean(request.fullName()));
     patient.setDateOfBirth(request.dateOfBirth());
     patient.setGender(request.gender());
     patient.setPhone(normalizePhone(request.phone()));
-    patient.setContactEmail(request.contactEmail());
-    patient.setAddress(request.address());
+    patient.setContactEmail(cleanOrNull(request.contactEmail()));
+    patient.setAddress(clean(request.address()));
     return PatientResponse.from(patient);
   }
 
@@ -225,7 +238,8 @@ public class PatientService {
   public Page<PatientResponse> searchByIdentityNumber(
       String identityNumber, PatientActor actor, Pageable pageable) {
     requireRole(actor, SEARCH_ROLES);
-    String normalized = requireNotBlank(identityNumber, "Số giấy tờ không được để trống");
+    String normalized =
+        normalizeIdentityNumber(requireNotBlank(identityNumber, "Số giấy tờ không được để trống"));
     Page<Patient> matches =
         actor.role() == UserRole.PATIENT
             ? patientRepository.findByIdentityNumberAndUserId(normalized, actor.userId(), pageable)
@@ -313,6 +327,62 @@ public class PatientService {
                         PatientErrorCode.PATIENT_NOT_FOUND, "Không tìm thấy bệnh nhân"));
     requireOwnerIfPatient(actor, patient);
     return patient;
+  }
+
+  /**
+   * The birth date must not be in the future (today in the application time zone is fine, e.g. a
+   * newborn) and not before {@link #EARLIEST_BIRTH_DATE}. Done here, not with {@code @Past},
+   * because Bean Validation would compare against the JVM time zone instead of {@code
+   * app.timezone}.
+   */
+  private void requireValidBirthDate(LocalDate dateOfBirth) {
+    if (dateOfBirth.isAfter(LocalDate.now(clock)) || dateOfBirth.isBefore(EARLIEST_BIRTH_DATE)) {
+      throw new BusinessException(
+          CommonErrorCode.VALIDATION_ERROR,
+          "Dữ liệu không hợp lệ",
+          List.of(
+              new FieldViolation(
+                  "dateOfBirth",
+                  "Ngày sinh phải từ 01/01/1900 đến hôm nay, không được ở tương lai")));
+    }
+  }
+
+  /**
+   * Identity numbers are stored without whitespace and in upper case, so a passport typed as "b12
+   * 34567" matches "B1234567". Applied on create and on search.
+   */
+  private static String normalizeIdentityNumber(String raw) {
+    return raw.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
+  }
+
+  /** Checks the number's shape for its document type (already normalized). */
+  private static void requireValidIdentityNumber(IdentityType type, String number) {
+    String problem =
+        switch (type) {
+          case CCCD -> number.matches("[0-9]{12}") ? null : "Số CCCD phải gồm đúng 12 chữ số";
+          // Old cards have 9 digits; some provinces issued 12-digit CMND numbers.
+          case CMND ->
+              number.matches("[0-9]{9}|[0-9]{12}") ? null : "Số CMND phải gồm 9 hoặc 12 chữ số";
+          case PASSPORT ->
+              number.matches("[A-Z0-9]{6,9}")
+                  ? null
+                  : "Số hộ chiếu phải gồm 6 đến 9 ký tự, chỉ chữ cái (A-Z) và chữ số";
+        };
+    if (problem != null) {
+      throw new BusinessException(
+          CommonErrorCode.VALIDATION_ERROR,
+          "Dữ liệu không hợp lệ",
+          List.of(new FieldViolation("identityNumber", problem)));
+    }
+  }
+
+  private static String clean(String value) {
+    return value.trim();
+  }
+
+  /** Blank optional text is stored as {@code null}, never as an empty string. */
+  private static String cleanOrNull(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
   }
 
   private static String requireNotBlank(String value, String message) {
