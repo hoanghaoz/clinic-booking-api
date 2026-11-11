@@ -1,13 +1,13 @@
 package com.se100.clinic.patient;
 
 import com.se100.clinic.patient.enums.Gender;
+import com.se100.clinic.patient.enums.IdentityType;
 import com.se100.clinic.patient.enums.PatientCardStatus;
 import com.se100.clinic.patient.enums.PatientClass;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
@@ -30,35 +30,46 @@ public final class PatientDtos {
   // userId and patientClass are intentionally absent: the server derives userId from the
   // authenticated principal on self-registration, and patientClass defaults to PERSONAL.
   public record PatientCreateRequest(
-      @NotBlank(message = "Họ tên không được để trống") @Size(max = 150) String fullName,
-      @NotNull(message = "Ngày sinh không được để trống")
-          @Past(message = "Ngày sinh phải là ngày trong quá khứ")
-          LocalDate dateOfBirth,
+      @NotBlank(message = "Họ tên không được để trống")
+          @Size(max = 150, message = "Họ tên tối đa 150 ký tự")
+          String fullName,
+      // Range (not in the future, not before 1900) is checked in PatientService with the app clock.
+      @NotNull(message = "Ngày sinh không được để trống") LocalDate dateOfBirth,
       @NotNull(message = "Giới tính không được để trống") Gender gender,
       @NotBlank(message = "Số điện thoại không được để trống")
-          @Size(max = 25)
+          @Size(max = 25, message = "Số điện thoại tối đa 25 ký tự")
           @Pattern(regexp = PHONE_REGEX, message = "Số điện thoại không hợp lệ")
           String phone,
-      @Email(message = "Email không hợp lệ") @Size(max = 254) String contactEmail,
-      @NotBlank(message = "Địa chỉ không được để trống") String address,
-      @NotBlank(message = "Loại giấy tờ không được để trống") @Size(max = 20) String identityType,
-      @NotBlank(message = "Số giấy tờ không được để trống") @Size(max = 40) String identityNumber,
-      @NotBlank(message = "Nơi cấp giấy tờ không được để trống") @Size(max = 80)
+      @Email(message = "Email không hợp lệ") @Size(max = 254, message = "Email tối đa 254 ký tự")
+          String contactEmail,
+      @NotBlank(message = "Địa chỉ không được để trống")
+          @Size(max = 500, message = "Địa chỉ tối đa 500 ký tự")
+          String address,
+      @NotNull(message = "Loại giấy tờ không được để trống") IdentityType identityType,
+      @NotBlank(message = "Số giấy tờ không được để trống")
+          @Size(max = 40, message = "Số giấy tờ tối đa 40 ký tự")
+          String identityNumber,
+      @NotBlank(message = "Nơi cấp giấy tờ không được để trống")
+          @Size(max = 80, message = "Nơi cấp giấy tờ tối đa 80 ký tự")
           String identityIssuer) {}
 
   // Identity fields are not updatable: they form the unique key uk_patients_identity.
   public record PatientUpdateRequest(
-      @NotBlank(message = "Họ tên không được để trống") @Size(max = 150) String fullName,
-      @NotNull(message = "Ngày sinh không được để trống")
-          @Past(message = "Ngày sinh phải là ngày trong quá khứ")
-          LocalDate dateOfBirth,
+      @NotBlank(message = "Họ tên không được để trống")
+          @Size(max = 150, message = "Họ tên tối đa 150 ký tự")
+          String fullName,
+      // Range (not in the future, not before 1900) is checked in PatientService with the app clock.
+      @NotNull(message = "Ngày sinh không được để trống") LocalDate dateOfBirth,
       @NotNull(message = "Giới tính không được để trống") Gender gender,
       @NotBlank(message = "Số điện thoại không được để trống")
-          @Size(max = 25)
+          @Size(max = 25, message = "Số điện thoại tối đa 25 ký tự")
           @Pattern(regexp = PHONE_REGEX, message = "Số điện thoại không hợp lệ")
           String phone,
-      @Email(message = "Email không hợp lệ") @Size(max = 254) String contactEmail,
-      @NotBlank(message = "Địa chỉ không được để trống") String address) {}
+      @Email(message = "Email không hợp lệ") @Size(max = 254, message = "Email tối đa 254 ký tự")
+          String contactEmail,
+      @NotBlank(message = "Địa chỉ không được để trống")
+          @Size(max = 500, message = "Địa chỉ tối đa 500 ký tự")
+          String address) {}
 
   // ADMIN-only. Only PERSONAL and VIP are assignable here; COMPANY is owned by the company module
   // and the future service must reject it.
@@ -107,7 +118,7 @@ public final class PatientDtos {
       String phone,
       String contactEmail,
       String address,
-      String identityType,
+      IdentityType identityType,
       String identityNumber,
       String identityIssuer,
       PatientClass patientClass,

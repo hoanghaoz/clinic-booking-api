@@ -1,5 +1,6 @@
 package com.se100.clinic.patient;
 
+import com.se100.clinic.patient.enums.IdentityType;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -23,7 +24,7 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
   boolean existsByUserId(Long userId);
 
   boolean existsByIdentityTypeAndIdentityIssuerAndIdentityNumber(
-      String identityType, String identityIssuer, String identityNumber);
+      IdentityType identityType, String identityIssuer, String identityNumber);
 
   boolean existsByCardNumber(String cardNumber);
 }

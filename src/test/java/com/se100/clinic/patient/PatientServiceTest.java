@@ -14,6 +14,7 @@ import com.se100.clinic.patient.PatientDtos.PatientCreateRequest;
 import com.se100.clinic.patient.PatientDtos.PatientResponse;
 import com.se100.clinic.patient.PatientDtos.PatientUpdateRequest;
 import com.se100.clinic.patient.enums.Gender;
+import com.se100.clinic.patient.enums.IdentityType;
 import com.se100.clinic.patient.enums.PatientCardStatus;
 import com.se100.clinic.patient.enums.PatientClass;
 import com.se100.clinic.shared.error.BusinessException;
@@ -127,7 +128,7 @@ class PatientServiceTest {
   @Test
   void create_shouldThrowConflict_whenIdentityAlreadyExists() {
     when(patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumber(
-            "CCCD", "Cục CSQLHC", "079123456789"))
+            IdentityType.CCCD, "Cục CSQLHC", "079123456789"))
         .thenReturn(true);
 
     assertThatThrownBy(() -> patientService.create(createRequest(), STAFF))
@@ -194,6 +195,239 @@ class PatientServiceTest {
             BusinessException.class,
             e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.CONFLICT));
     verify(patientRepository, never()).saveAndFlush(any());
+  }
+
+  // ---- input edge cases ----
+
+  private static PatientCreateRequest createRequestWithBirthDate(LocalDate dateOfBirth) {
+    return new PatientCreateRequest(
+        "Nguyễn Văn A",
+        dateOfBirth,
+        Gender.MALE,
+        "0901234567",
+        null,
+        "Quận 3",
+        IdentityType.CCCD,
+        "079123456789",
+        "Cục CSQLHC");
+  }
+
+  private void assertBirthDateRejected(LocalDate dateOfBirth) {
+    assertThatThrownBy(() -> patientService.create(createRequestWithBirthDate(dateOfBirth), STAFF))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> {
+              assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.VALIDATION_ERROR);
+              assertThat(e.getViolations())
+                  .extracting(violation -> violation.field())
+                  .containsExactly("dateOfBirth");
+            });
+    verify(patientRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void create_shouldRejectBirthDate_inTheFuture() {
+    // The clock is 2026-11-10 in Asia/Ho_Chi_Minh.
+    assertBirthDateRejected(LocalDate.of(2026, 11, 11));
+    assertBirthDateRejected(LocalDate.of(2999, 1, 1));
+  }
+
+  @Test
+  void create_shouldRejectBirthDate_beforeTheMinimum() {
+    assertBirthDateRejected(LocalDate.of(1899, 12, 31));
+    assertBirthDateRejected(LocalDate.of(1, 1, 1));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"2026-11-10", "2026-11-09", "1900-01-01"})
+  void create_shouldAcceptBirthDate_onTheBoundaries(LocalDate dateOfBirth) {
+    stubCreateHappyPath();
+
+    patientService.create(createRequestWithBirthDate(dateOfBirth), STAFF);
+
+    assertThat(captureSaved().getDateOfBirth()).isEqualTo(dateOfBirth);
+  }
+
+  @Test
+  void create_shouldUseApplicationTimeZone_notUtc_forToday() {
+    // 2026-11-10 20:00 UTC is already 2026-11-11 03:00 in Asia/Ho_Chi_Minh.
+    var lateEvening =
+        new PatientService(
+            patientRepository,
+            Clock.fixed(Instant.parse("2026-11-10T20:00:00Z"), ZoneId.of("Asia/Ho_Chi_Minh")));
+    when(patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumber(
+            any(), any(), any()))
+        .thenReturn(false);
+    when(patientRepository.existsByCardNumber(any())).thenReturn(false);
+    when(patientRepository.saveAndFlush(any(Patient.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    lateEvening.create(createRequestWithBirthDate(LocalDate.of(2026, 11, 11)), STAFF);
+
+    assertThat(captureSaved().getDateOfBirth()).isEqualTo(LocalDate.of(2026, 11, 11));
+  }
+
+  @Test
+  void create_shouldTrimText_beforeCheckingDuplicatesAndSaving() {
+    when(patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumber(
+            IdentityType.CCCD, "Cục CSQLHC", "079123456789"))
+        .thenReturn(false);
+    when(patientRepository.existsByCardNumber(any())).thenReturn(false);
+    when(patientRepository.saveAndFlush(any(Patient.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+    var request =
+        new PatientCreateRequest(
+            "  Nguyễn Văn A  ",
+            LocalDate.of(1990, 5, 20),
+            Gender.MALE,
+            "0901234567",
+            "   ",
+            "  Quận 3 ",
+            IdentityType.CCCD,
+            " 079123456789 ",
+            "  Cục CSQLHC ");
+
+    patientService.create(request, STAFF);
+
+    Patient saved = captureSaved();
+    assertThat(saved.getFullName()).isEqualTo("Nguyễn Văn A");
+    assertThat(saved.getAddress()).isEqualTo("Quận 3");
+    assertThat(saved.getIdentityType()).isEqualTo(IdentityType.CCCD);
+    assertThat(saved.getIdentityNumber()).isEqualTo("079123456789");
+    assertThat(saved.getIdentityIssuer()).isEqualTo("Cục CSQLHC");
+    // A blank optional email is stored as null, not "".
+    assertThat(saved.getContactEmail()).isNull();
+  }
+
+  private static PatientCreateRequest createRequestWithIdentity(IdentityType type, String number) {
+    return new PatientCreateRequest(
+        "Nguyễn Văn A",
+        LocalDate.of(1990, 5, 20),
+        Gender.MALE,
+        "0901234567",
+        null,
+        "Quận 3",
+        type,
+        number,
+        "Cục CSQLHC");
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "CCCD, 07912345678",
+    "CCCD, 0791234567890",
+    "CCCD, 07912345678A",
+    "CCCD, 079-123-456-789",
+    "CMND, 12345678",
+    "CMND, 1234567890",
+    "CMND, 12345678A",
+    "PASSPORT, AB123",
+    "PASSPORT, ABCDEFGHIJ",
+    "PASSPORT, AB-123456",
+    "PASSPORT, B123456_"
+  })
+  void create_shouldRejectIdentityNumber_whenShapeDoesNotMatchType(
+      IdentityType type, String number) {
+    assertThatThrownBy(() -> patientService.create(createRequestWithIdentity(type, number), STAFF))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> {
+              assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.VALIDATION_ERROR);
+              assertThat(e.getViolations())
+                  .extracting(violation -> violation.field())
+                  .containsExactly("identityNumber");
+            });
+    verify(patientRepository, never()).saveAndFlush(any());
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "CCCD, 079123456789, 079123456789",
+    "CMND, 123456789, 123456789",
+    "CMND, 123456789012, 123456789012",
+    "PASSPORT, B1234567, B1234567",
+    "PASSPORT, AB1234, AB1234",
+    "PASSPORT, A12345678, A12345678"
+  })
+  void create_shouldAcceptIdentityNumber_whenShapeMatchesType(
+      IdentityType type, String number, String stored) {
+    stubCreateHappyPath(type, stored);
+
+    patientService.create(createRequestWithIdentity(type, number), STAFF);
+
+    assertThat(captureSaved().getIdentityNumber()).isEqualTo(stored);
+  }
+
+  @Test
+  void create_shouldStripWhitespaceAndUppercaseIdentityNumber_beforeValidatingAndSaving() {
+    when(patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumber(
+            any(), any(), any()))
+        .thenReturn(false);
+    when(patientRepository.existsByCardNumber(any())).thenReturn(false);
+    when(patientRepository.saveAndFlush(any(Patient.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    patientService.create(createRequestWithIdentity(IdentityType.PASSPORT, " b12 34567 "), STAFF);
+    patientService.create(createRequestWithIdentity(IdentityType.CCCD, "079 123 456 789"), STAFF);
+
+    var captor = ArgumentCaptor.forClass(Patient.class);
+    verify(patientRepository, org.mockito.Mockito.times(2)).saveAndFlush(captor.capture());
+    assertThat(captor.getAllValues())
+        .extracting(Patient::getIdentityNumber)
+        .containsExactly("B1234567", "079123456789");
+  }
+
+  @Test
+  void searchByIdentityNumber_shouldNormalizeLikeCreate_beforeLookup() {
+    when(patientRepository.findByIdentityNumber("B1234567", PAGE)).thenReturn(Page.empty(PAGE));
+
+    assertThat(patientService.searchByIdentityNumber(" b12 34567 ", STAFF, PAGE).getContent())
+        .isEmpty();
+    verify(patientRepository).findByIdentityNumber("B1234567", PAGE);
+  }
+
+  @Test
+  void update_shouldRejectBirthDateInTheFuture_andLeaveProfileUntouched() {
+    UUID publicId = UUID.randomUUID();
+    Patient patient = patient(7L);
+    when(patientRepository.findByPublicId(publicId)).thenReturn(Optional.of(patient));
+    var request =
+        new PatientUpdateRequest(
+            "Nguyễn Văn B",
+            LocalDate.of(2026, 11, 11),
+            Gender.FEMALE,
+            "0987654321",
+            null,
+            "Quận 1");
+
+    assertThatThrownBy(() -> patientService.update(publicId, request, PATIENT))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.VALIDATION_ERROR));
+    assertThat(patient.getFullName()).isEqualTo("Nguyễn Văn A");
+    assertThat(patient.getDateOfBirth()).isEqualTo(LocalDate.of(1990, 5, 20));
+  }
+
+  @Test
+  void update_shouldTrimTextAndStoreBlankEmailAsNull() {
+    UUID publicId = UUID.randomUUID();
+    Patient patient = patient(7L);
+    patient.setContactEmail("old@example.com");
+    when(patientRepository.findByPublicId(publicId)).thenReturn(Optional.of(patient));
+    var request =
+        new PatientUpdateRequest(
+            "  Nguyễn Văn B ",
+            LocalDate.of(1991, 6, 21),
+            Gender.FEMALE,
+            "0987654321",
+            "",
+            " Quận 1 ");
+
+    patientService.update(publicId, request, PATIENT);
+
+    assertThat(patient.getFullName()).isEqualTo("Nguyễn Văn B");
+    assertThat(patient.getAddress()).isEqualTo("Quận 1");
+    assertThat(patient.getContactEmail()).isNull();
   }
 
   // ---- update ----
@@ -515,7 +749,7 @@ class PatientServiceTest {
             "090 123-4567",
             "a@example.com",
             "Quận 3",
-            "CCCD",
+            IdentityType.CCCD,
             "079123456789",
             "Cục CSQLHC");
 
@@ -718,9 +952,18 @@ class PatientServiceTest {
 
   // ---- helpers ----
 
+  private void stubCreateHappyPath(IdentityType type, String storedNumber) {
+    when(patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumber(
+            type, "Cục CSQLHC", storedNumber))
+        .thenReturn(false);
+    when(patientRepository.existsByCardNumber(any())).thenReturn(false);
+    when(patientRepository.saveAndFlush(any(Patient.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+  }
+
   private void stubCreateHappyPath() {
     when(patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumber(
-            "CCCD", "Cục CSQLHC", "079123456789"))
+            IdentityType.CCCD, "Cục CSQLHC", "079123456789"))
         .thenReturn(false);
     when(patientRepository.existsByCardNumber(any())).thenReturn(false);
     when(patientRepository.saveAndFlush(any(Patient.class)))
@@ -747,7 +990,7 @@ class PatientServiceTest {
         "0901234567",
         "a@example.com",
         "Quận 3",
-        "CCCD",
+        IdentityType.CCCD,
         "079123456789",
         "Cục CSQLHC");
   }
@@ -770,7 +1013,7 @@ class PatientServiceTest {
     patient.setGender(Gender.MALE);
     patient.setPhone("0901234567");
     patient.setAddress("Quận 3");
-    patient.setIdentityType("CCCD");
+    patient.setIdentityType(IdentityType.CCCD);
     patient.setIdentityNumber("079123456789");
     patient.setIdentityIssuer("Cục CSQLHC");
     return patient;

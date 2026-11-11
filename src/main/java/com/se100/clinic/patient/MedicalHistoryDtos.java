@@ -19,17 +19,21 @@ public final class MedicalHistoryDtos {
 
   public record MedicalHistoryCreateRequest(
       @NotNull(message = "Loại tiền sử không được để trống") MedicalHistoryType type,
-      @NotBlank(message = "Mô tả không được để trống") @Size(max = 2000) String description,
+      @NotBlank(message = "Mô tả không được để trống")
+          @Size(max = 2000, message = "Mô tả tối đa 2000 ký tự")
+          String description,
       @Schema(
               description =
                   "Quan hệ trong gia đình; bắt buộc khi type = FAMILY, bỏ trống với loại khác")
-          @Size(max = 50)
+          @Size(max = 50, message = "Quan hệ gia đình tối đa 50 ký tự")
           String familyRelationship) {}
 
   // The type of an entry never changes after it is recorded.
   public record MedicalHistoryUpdateRequest(
-      @NotBlank(message = "Mô tả không được để trống") @Size(max = 2000) String description,
-      @Size(max = 50) String familyRelationship) {}
+      @NotBlank(message = "Mô tả không được để trống")
+          @Size(max = 2000, message = "Mô tả tối đa 2000 ký tự")
+          String description,
+      @Size(max = 50, message = "Quan hệ gia đình tối đa 50 ký tự") String familyRelationship) {}
 
   @Schema(requiredProperties = {"id", "type", "description", "source", "recordedAt", "updatedAt"})
   public record MedicalHistoryResponse(
