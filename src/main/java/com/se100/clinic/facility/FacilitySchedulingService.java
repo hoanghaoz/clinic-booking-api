@@ -5,7 +5,10 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +18,22 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class FacilitySchedulingService {
   private final EntityManager entityManager;
+  private final ClinicRepository clinics;
+
+  @Transactional(readOnly = true)
+  public Page<BookingClinic> openClinics(Pageable pageable) {
+    return clinics
+        .findByStatus(FacilityStatus.OPENING, pageable)
+        .map(
+            clinic ->
+                new BookingClinic(
+                    clinic.getId(), clinic.getPublicId(), clinic.getName(), clinic.getAddress()));
+  }
+
+  @Transactional(readOnly = true)
+  public String clinicName(Long clinicId) {
+    return entityManager.find(Clinic.class, clinicId).getName();
+  }
 
   /** Serializes a new assignment with an administrator closing its clinic or room. */
   @Transactional(propagation = Propagation.MANDATORY)
@@ -66,4 +85,6 @@ public class FacilitySchedulingService {
   }
 
   public record RoomAssignment(Long clinicId, boolean roomOpen, boolean clinicOpen) {}
+
+  public record BookingClinic(Long id, UUID publicId, String name, String address) {}
 }

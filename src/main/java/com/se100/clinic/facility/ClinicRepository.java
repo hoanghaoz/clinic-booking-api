@@ -1,9 +1,12 @@
 package com.se100.clinic.facility;
 
+import com.se100.clinic.facility.enums.FacilityStatus;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
@@ -12,6 +15,8 @@ import org.springframework.data.repository.query.Param;
 
 interface ClinicRepository extends JpaRepository<Clinic, Long>, JpaSpecificationExecutor<Clinic> {
   Optional<Clinic> findByPublicId(UUID publicId);
+
+  Page<Clinic> findByStatus(FacilityStatus status, Pageable pageable);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select c from Clinic c where c.publicId = :publicId")
