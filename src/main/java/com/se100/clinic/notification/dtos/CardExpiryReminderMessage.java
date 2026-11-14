@@ -4,10 +4,9 @@ import java.time.Instant;
 
 public record CardExpiryReminderMessage(
   Long patientId,
-  String cardNumber,
   Instant expiresAt
 ) {
-  public static CardExpiryReminderMessage of(Long patientId, String cardNumber, Instant expiresAt) {
-    return new CardExpiryReminderMessage(patientId, cardNumber, expiresAt);
+  public static CardExpiryReminderMessage of(Long patientId, Instant expiresAt) {
+    return new CardExpiryReminderMessage(patientId, expiresAt);
   }
 }
