@@ -28,6 +28,18 @@ spring:
     # Publisher confirms: the broker acknowledges every published message.
     publisher-confirm-type: correlated
     publisher-returns: true
+    listener:
+      simple:
+        default-requeue-rejected: false
+        prefetch: 10
+        # Starts with 1 consumer and grows up to 3 when the queue backs up.
+        max-concurrency: 3
+        retry:
+          enabled: true
+          max-retries: 3
+          multiplier: 2
+          max-interval: 30s
+          initial-interval: 2s
 
   mail:
     host: ${MAIL_HOST:localhost}
@@ -40,6 +52,9 @@ spring:
           auth: false
           starttls:
             enable: false
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 app:
   security:
