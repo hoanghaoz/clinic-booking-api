@@ -1,8 +1,11 @@
 package com.se100.clinic.config;
 
+import com.se100.clinic.shared.error.BusinessException;
+import java.util.List;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.boot.amqp.autoconfigure.RabbitListenerRetrySettingsCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -54,5 +57,12 @@ public class RabbitMQConfig {
   @Bean
   MessageConverter jsonMessageConverter() {
     return new JacksonJsonMessageConverter();
+  }
+
+  // Business failures (for example "patient not found") never succeed on a retry, so they skip the
+  // retries and go straight to the dead letter queue. Other errors (SMTP, database) are retried.
+  @Bean
+  RabbitListenerRetrySettingsCustomizer retrySettingsCustomizer() {
+    return retrySettings -> retrySettings.setExceptionExcludes(List.of(BusinessException.class));
   }
 }
