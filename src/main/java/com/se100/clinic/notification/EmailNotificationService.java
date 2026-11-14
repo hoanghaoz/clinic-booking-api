@@ -8,24 +8,47 @@ import com.se100.clinic.patient.PatientService;
 import com.se100.clinic.shared.error.BusinessException;
 import com.se100.clinic.shared.error.CommonErrorCode;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 /**
- * Delivers a notification by email. Unlike in-app, sending can fail, so the row is saved as PENDING
- * first (this also claims the dedup key), then the mail is sent, then the row becomes SENT. A
- * redelivered message finds the row: SENT means done, anything else is sent again.
+ * Delivers a notification by email. Unlike in-app, sending can fail, so it goes in three steps:
+ *
+ * <ol>
+ *   <li>Make sure a PENDING row exists for the dedup key (the unique key stops duplicates).
+ *   <li>Claim the row atomically (PROCESSING + a lock). Only the consumer that wins the claim may
+ *       send, so two consumers never send the same mail at the same time.
+ *   <li>Send the mail, then mark the row SENT, or FAILED so the message is retried.
+ * </ol>
+ *
+ * <p>One duplicate is still possible and cannot be removed with SMTP: the mail is sent but the app
+ * dies before the row is marked SENT. After the lock expires, the redelivered message sends again.
  */
 @Service
 public class EmailNotificationService implements NotificationStrategy {
 
   private static final Logger log = LoggerFactory.getLogger(EmailNotificationService.class);
+
+  /**
+   * How long a claim stays valid. Must be well above the worst-case time to send one mail (the SMTP
+   * timeouts in application.yml are 5 seconds each), or a slow send could be claimed twice.
+   */
+  private static final Duration LOCK_DURATION = Duration.ofMinutes(3);
+
+  /**
+   * States a notification may be claimed from; PROCESSING is claimable only once its lock expires.
+   */
+  private static final List<NotificationStatus> CLAIMABLE =
+      List.of(NotificationStatus.PENDING, NotificationStatus.FAILED);
 
   private final NotificationRepository notificationRepository;
   private final PatientService patientService;
@@ -65,33 +88,68 @@ public class EmailNotificationService implements NotificationStrategy {
     }
 
     String dedupKey = buildDedupKey(request);
-    // If two deliveries race on the insert, the unique key rejects one; its message is retried and
-    // then finds the row.
-    Notification notification =
-        notificationRepository
-            .findByDeduplicationKey(dedupKey)
-            .orElseGet(() -> notificationRepository.save(newPending(request, contact, dedupKey)));
+    ensureRowExists(request, contact, dedupKey);
 
-    if (notification.getStatus() == NotificationStatus.SENT) {
-      log.debug("Skip email notification: already sent for key {}", dedupKey);
+    if (!claim(dedupKey)) {
+      log.debug("Skip email notification: already sent or being sent for key {}", dedupKey);
       return;
     }
 
-    notification.setAttemptCount(notification.getAttemptCount() + 1);
+    // Reload: the claim changed the row, so the copy we had before it is stale. Saving a stale copy
+    // would overwrite the attempt count and the lock.
+    Notification notification =
+        notificationRepository.findByDeduplicationKey(dedupKey).orElseThrow();
+
     try {
       mailSender.send(buildMail(notification));
-      notification.setStatus(NotificationStatus.SENT);
-      notification.setSentAt(clock.instant());
-      notification.setLastError(null);
-      notificationRepository.save(notification);
+      markSent(notification);
     } catch (MailException e) {
-      notification.setStatus(NotificationStatus.FAILED);
-      // Only the exception type: SMTP messages can contain the recipient address.
-      notification.setLastError(e.getClass().getSimpleName());
-      notificationRepository.save(notification);
+      markFailed(notification, e);
       // Rethrow so the message is retried (and dead-lettered once retries run out).
       throw e;
     }
+  }
+
+  /**
+   * Creates the PENDING row if it is missing. Losing the insert race to another consumer is fine.
+   */
+  private void ensureRowExists(
+      NotificationRequest request, PatientContact contact, String dedupKey) {
+    if (notificationRepository.existsByDeduplicationKey(dedupKey)) {
+      return;
+    }
+    try {
+      notificationRepository.save(newPending(request, contact, dedupKey));
+    } catch (DataIntegrityViolationException e) {
+      log.debug("Another consumer created the row for key {} first", dedupKey);
+    }
+  }
+
+  /**
+   * @return true if this consumer now owns the row and may send the mail.
+   */
+  private boolean claim(String dedupKey) {
+    Instant now = clock.instant();
+    int claimed =
+        notificationRepository.claimForSending(
+            dedupKey, now, now.plus(LOCK_DURATION), NotificationStatus.PROCESSING, CLAIMABLE);
+    return claimed == 1;
+  }
+
+  private void markSent(Notification notification) {
+    notification.setStatus(NotificationStatus.SENT);
+    notification.setSentAt(clock.instant());
+    notification.setLastError(null);
+    notification.setLockedUntil(null);
+    notificationRepository.save(notification);
+  }
+
+  private void markFailed(Notification notification, MailException e) {
+    notification.setStatus(NotificationStatus.FAILED);
+    // Only the exception type: SMTP messages can contain the recipient address.
+    notification.setLastError(e.getClass().getSimpleName());
+    notification.setLockedUntil(null);
+    notificationRepository.save(notification);
   }
 
   private Notification newPending(
