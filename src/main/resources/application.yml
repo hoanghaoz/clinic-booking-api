@@ -32,6 +32,8 @@ spring:
       simple:
         default-requeue-rejected: false
         prefetch: 10
+        # Starts with 1 consumer and grows up to 3 when the queue backs up.
+        max-concurrency: 3
         retry:
           enabled: true
           max-retries: 3
