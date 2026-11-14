@@ -16,19 +16,31 @@ import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.testcontainers.rabbitmq.RabbitMQContainer;
+import org.testcontainers.utility.DockerImageName;
 
 /**
  * Checks that a failure which can never succeed on a retry (the patient does not exist) goes to the
  * dead letter queue right away, instead of after all retries (2s + 4s + 8s).
  *
- * <p>Talks to the RabbitMQ from docker-compose, so stop the {@code clinic-api} container first: it
- * listens on the same queue and would take the message.
+ * <p>Runs against its own RabbitMQ container (same image as docker-compose), so it needs neither a
+ * broker on localhost nor a stopped {@code clinic-api} container.
  */
 class CardExpiryDeadLetterIntegrationTest extends AbstractIntegrationTest {
 
   // Far below the 14 seconds that three retries would take.
   private static final Duration MUST_ARRIVE_WITHIN = Duration.ofSeconds(6);
+
+  // Started once for this test class; @ServiceConnection points spring.rabbitmq.* at it.
+  @ServiceConnection
+  static final RabbitMQContainer RABBITMQ =
+      new RabbitMQContainer(DockerImageName.parse("rabbitmq:4.4.0-management-alpine"));
+
+  static {
+    RABBITMQ.start();
+  }
 
   @Autowired private RabbitTemplate rabbitTemplate;
   @Autowired private AmqpAdmin amqpAdmin;
