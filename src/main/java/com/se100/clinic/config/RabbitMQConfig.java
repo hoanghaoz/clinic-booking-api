@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMQConfig {
   public static final String EXCHANGE = "notification.exchange";
-  public static final String QUEUE = "notification.card-expiry";
+  public static final String QUEUE = "notification.card-expiry.queue";
   public static final String ROUTING_KEY = "card.expiring";
   public static final String DLX = "notification.dlx";
   public static final String DLQ = "notification.card-expiry.dlq";
