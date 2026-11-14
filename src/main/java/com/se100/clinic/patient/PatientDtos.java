@@ -24,6 +24,13 @@ public final class PatientDtos {
 
   private PatientDtos() {}
 
+  /**
+   * Minimal contact data of a patient for other modules (for example notification). Internal ids
+   * are included on purpose: other modules store them as soft foreign keys. Never return this from
+   * an API endpoint.
+   */
+  public record PatientContact(Long patientId, Long userId, String email, String fullName) {}
+
   // Loose international-style phone format: optional leading +, then digits, spaces, dots, dashes.
   private static final String PHONE_REGEX = "^\\+?[0-9][0-9 .\\-]{6,23}$";
 

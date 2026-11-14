@@ -7,6 +7,7 @@ import com.se100.clinic.auth.enums.UserRole;
 import com.se100.clinic.patient.PatientDtos.PatientCardResponse;
 import com.se100.clinic.patient.PatientDtos.PatientCardValidityResponse;
 import com.se100.clinic.patient.PatientDtos.PatientClassUpdateRequest;
+import com.se100.clinic.patient.PatientDtos.PatientContact;
 import com.se100.clinic.patient.PatientDtos.PatientCreateRequest;
 import com.se100.clinic.patient.PatientDtos.PatientResponse;
 import com.se100.clinic.patient.PatientDtos.PatientUpdateRequest;
@@ -27,6 +28,7 @@ import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -245,6 +247,23 @@ public class PatientService {
             ? patientRepository.findByIdentityNumberAndUserId(normalized, actor.userId(), pageable)
             : patientRepository.findByIdentityNumber(normalized, pageable);
     return matches.map(PatientResponse::from);
+  }
+
+  /**
+   * Contact data of one patient for system-to-system use (for example the notification module).
+   * There is no actor check, so never call it on behalf of an API request.
+   */
+  @Transactional(readOnly = true)
+  public Optional<PatientContact> findContact(Long patientId) {
+    return patientRepository
+        .findById(patientId)
+        .map(
+            patient ->
+                new PatientContact(
+                    patient.getId(),
+                    patient.getUserId(),
+                    patient.getContactEmail(),
+                    patient.getFullName()));
   }
 
   @Transactional(readOnly = true)

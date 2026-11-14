@@ -2,6 +2,9 @@ package com.se100.clinic.patient;
 
 import com.se100.clinic.config.RabbitMQConfig;
 import com.se100.clinic.notification.dtos.CardExpiryReminderMessage;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,10 +16,6 @@ import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
 
 @Component
 @RequiredArgsConstructor
@@ -41,19 +40,23 @@ class CardExpiryReminderJob {
       Pageable pageable = PageRequest.of(page++, PAGE_SIZE, Sort.by("id"));
       slice = patientRepository.findPatientCardExpiresToRemind(from, to, pageable);
 
-      for(var patient : slice.getContent()) {
-        log.info("CardExpiryReminderJob: reminding patient {} of expiring card at {}", patient.getId(), patient.getCardExpiresAt());
-        try{
+      for (var patient : slice.getContent()) {
+        log.info(
+            "CardExpiryReminderJob: reminding patient {} of expiring card at {}",
+            patient.getId(),
+            patient.getCardExpiresAt());
+        try {
           rabbitTemplate.convertAndSend(
-            RabbitMQConfig.EXCHANGE,
-            RabbitMQConfig.ROUTING_KEY,
-            CardExpiryReminderMessage.of(patient.getId(), patient.getCardExpiresAt()));
-        }
-        catch(AmqpException e){
-          log.error("CardExpiryReminderJob: failed to send reminder for patient {}: {}", patient.getId(), e.getMessage());
+              RabbitMQConfig.EXCHANGE,
+              RabbitMQConfig.ROUTING_KEY,
+              CardExpiryReminderMessage.of(patient.getId(), patient.getCardExpiresAt()));
+        } catch (AmqpException e) {
+          log.error(
+              "CardExpiryReminderJob: failed to send reminder for patient {}: {}",
+              patient.getId(),
+              e.getMessage());
         }
       }
-    }
-    while (slice.hasNext());
+    } while (slice.hasNext());
   }
 }

@@ -1,15 +1,14 @@
 package com.se100.clinic.patient;
 
 import com.se100.clinic.patient.enums.IdentityType;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-
-import java.time.Instant;
-import java.util.Optional;
-import java.util.UUID;
 
 public interface PatientRepository extends JpaRepository<Patient, Long> {
   Optional<Patient> findByPublicId(UUID publicId);
