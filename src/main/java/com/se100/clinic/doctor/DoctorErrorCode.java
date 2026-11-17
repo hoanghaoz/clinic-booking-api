@@ -9,6 +9,8 @@ enum DoctorErrorCode implements ErrorCode {
   DOCTOR_CODE_EXISTS(HttpStatus.CONFLICT),
   /** {@code userId} in the request does not match any account. */
   DOCTOR_USER_NOT_FOUND(HttpStatus.NOT_FOUND),
+  /** The account exists but its role is not DOCTOR, so it cannot log in as a doctor. */
+  DOCTOR_USER_NOT_DOCTOR(HttpStatus.BAD_REQUEST),
   /** The account already has a doctor profile (one account = at most one doctor). */
   DOCTOR_USER_ALREADY_LINKED(HttpStatus.CONFLICT),
   /** A specialty cannot be removed while work schedules still use it for this doctor. */

@@ -6,10 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.se100.clinic.auth.AuthenticatedUserService;
+import com.se100.clinic.auth.enums.UserRole;
 import com.se100.clinic.doctor.DoctorDtos.CreateDoctorRequest;
 import com.se100.clinic.doctor.DoctorDtos.DoctorResponse;
 import com.se100.clinic.doctor.DoctorDtos.DoctorSpecialtyResponse;
@@ -40,12 +43,15 @@ class DoctorServiceTest {
 
   @Mock private DoctorRepository doctorRepository;
   @Mock private SpecialtyRepository specialtyRepository;
+  @Mock private AuthenticatedUserService users;
 
   private DoctorService doctorService;
 
   @BeforeEach
   void setUp() {
-    doctorService = new DoctorService(doctorRepository, specialtyRepository);
+    doctorService = new DoctorService(doctorRepository, specialtyRepository, users);
+    // Most tests create a doctor for account 5, which is a DOCTOR account.
+    lenient().when(users.roleForUserId(5L)).thenReturn(Optional.of(UserRole.DOCTOR));
   }
 
   private static Specialty specialty(long id, String code, boolean active) {
@@ -109,6 +115,26 @@ class DoctorServiceTest {
 
     assertFailsWith(
         DoctorErrorCode.DOCTOR_CODE_EXISTS, () -> doctorService.create(createRequest(List.of(1L))));
+    verify(doctorRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void create_shouldRejectAccountThatDoesNotExist() {
+    when(users.roleForUserId(5L)).thenReturn(Optional.empty());
+
+    assertFailsWith(
+        DoctorErrorCode.DOCTOR_USER_NOT_FOUND,
+        () -> doctorService.create(createRequest(List.of(1L))));
+    verify(doctorRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void create_shouldRejectAccountWithoutDoctorRole() {
+    when(users.roleForUserId(5L)).thenReturn(Optional.of(UserRole.PATIENT));
+
+    assertFailsWith(
+        DoctorErrorCode.DOCTOR_USER_NOT_DOCTOR,
+        () -> doctorService.create(createRequest(List.of(1L))));
     verify(doctorRepository, never()).saveAndFlush(any());
   }
 

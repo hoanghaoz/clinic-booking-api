@@ -1,10 +1,13 @@
 package com.se100.clinic.doctor;
 
+import com.se100.clinic.auth.AuthenticatedUserService;
+import com.se100.clinic.auth.enums.UserRole;
 import com.se100.clinic.doctor.DoctorDtos.CreateDoctorRequest;
 import com.se100.clinic.doctor.DoctorDtos.DoctorResponse;
 import com.se100.clinic.doctor.DoctorDtos.UpdateDoctorRequest;
 import com.se100.clinic.doctor.DoctorDtos.UpdateDoctorStatusRequest;
 import com.se100.clinic.employee.enums.EmployeeStatus;
+import com.se100.clinic.shared.error.BusinessException;
 import com.se100.clinic.shared.error.ConflictException;
 import com.se100.clinic.shared.error.DbErrors;
 import com.se100.clinic.shared.error.NotFoundException;
@@ -35,8 +38,9 @@ import org.springframework.transaction.annotation.Transactional;
  * shift).
  *
  * <p>The doctor's login account is created by Admin in the {@code auth} module first; this service
- * only links to it by {@code userId}. Whether that id exists is enforced by the DB foreign key
- * {@code fk_doctors_user_id} and translated into {@code DOCTOR_USER_NOT_FOUND}.
+ * only links to it by {@code userId}. {@link #create} checks through the auth module that the
+ * account exists and has the DOCTOR role; the DB foreign key {@code fk_doctors_user_id} still
+ * guards the race where the account is deleted in between.
  */
 @Service
 public class DoctorService {
@@ -53,10 +57,15 @@ public class DoctorService {
 
   private final DoctorRepository doctorRepository;
   private final SpecialtyRepository specialtyRepository;
+  private final AuthenticatedUserService users;
 
-  DoctorService(DoctorRepository doctorRepository, SpecialtyRepository specialtyRepository) {
+  DoctorService(
+      DoctorRepository doctorRepository,
+      SpecialtyRepository specialtyRepository,
+      AuthenticatedUserService users) {
     this.doctorRepository = doctorRepository;
     this.specialtyRepository = specialtyRepository;
+    this.users = users;
   }
 
   @Transactional
@@ -67,6 +76,7 @@ public class DoctorService {
     if (doctorRepository.existsByUserId(request.userId())) {
       throw userAlreadyLinked(request.userId());
     }
+    requireDoctorAccount(request.userId());
     Doctor doctor = new Doctor(request.userId(), request.code(), request.name(), request.degree());
     for (Specialty specialty : loadSpecialties(request.specialtyIds()).values()) {
       requireActive(specialty);
@@ -202,6 +212,26 @@ public class DoctorService {
           SpecialtyErrorCode.SPECIALTY_NOT_FOUND, "Không tìm thấy chuyên khoa với id=" + missing);
     }
     return found;
+  }
+
+  /**
+   * The linked login account must exist and have the DOCTOR role, otherwise JWT login never maps to
+   * it.
+   */
+  private void requireDoctorAccount(Long userId) {
+    UserRole role =
+        users
+            .roleForUserId(userId)
+            .orElseThrow(
+                () ->
+                    new NotFoundException(
+                        DoctorErrorCode.DOCTOR_USER_NOT_FOUND,
+                        "Không tìm thấy tài khoản với id=" + userId));
+    if (role != UserRole.DOCTOR) {
+      throw new BusinessException(
+          DoctorErrorCode.DOCTOR_USER_NOT_DOCTOR,
+          "Tài khoản id=" + userId + " không có vai trò bác sĩ (DOCTOR)");
+    }
   }
 
   private static void requireActive(Specialty specialty) {
