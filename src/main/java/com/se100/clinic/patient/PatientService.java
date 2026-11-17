@@ -9,6 +9,8 @@ import com.se100.clinic.patient.PatientDtos.PatientCardValidityResponse;
 import com.se100.clinic.patient.PatientDtos.PatientClassUpdateRequest;
 import com.se100.clinic.patient.PatientDtos.PatientContact;
 import com.se100.clinic.patient.PatientDtos.PatientCreateRequest;
+import com.se100.clinic.patient.PatientDtos.PatientIdentityUpdateRequest;
+import com.se100.clinic.patient.PatientDtos.PatientLinkRequest;
 import com.se100.clinic.patient.PatientDtos.PatientResponse;
 import com.se100.clinic.patient.PatientDtos.PatientUpdateRequest;
 import com.se100.clinic.patient.enums.IdentityType;
@@ -81,6 +83,8 @@ public class PatientService {
   private static final Set<UserRole> WRITE_ROLES = Set.of(UserRole.PATIENT, UserRole.MEDICAL_STAFF);
   private static final Set<UserRole> CARD_READ_ROLES =
       Set.of(UserRole.PATIENT, UserRole.MEDICAL_STAFF, UserRole.ADMIN);
+  // Revoking, reinstating and renewing a card, and fixing identity documents.
+  private static final Set<UserRole> MANAGE_ROLES = Set.of(UserRole.MEDICAL_STAFF, UserRole.ADMIN);
   private static final Set<UserRole> PATIENT_ONLY = Set.of(UserRole.PATIENT);
   private static final Set<UserRole> ADMIN_ONLY = Set.of(UserRole.ADMIN);
   // Everyone except COMPANY may look patients up (and open a single profile).
@@ -270,12 +274,112 @@ public class PatientService {
   public PatientCardResponse getCard(UUID publicId, PatientActor actor) {
     Patient patient = loadForActor(publicId, actor, CARD_READ_ROLES);
     requireCard(patient);
-    return new PatientCardResponse(
-        patient.getCardNumber(),
-        patient.getCardActivatedAt(),
-        patient.getCardExpiresAt(),
-        patient.getCardRevokedAt(),
-        cardStatus(patient, clock.instant()));
+    return toCardResponse(patient);
+  }
+
+  /**
+   * Extends the card by one year, counted from the later of its current expiry and now: an early
+   * renewal keeps the unused time, an expired card restarts from today. A revoked card must be
+   * reinstated first. The card number and activation date do not change.
+   */
+  @Transactional
+  public PatientCardResponse renewCard(UUID publicId, PatientActor actor) {
+    Patient patient = loadForActor(publicId, actor, MANAGE_ROLES);
+    requireCard(patient);
+    requireNotRevoked(patient);
+    Instant now = clock.instant();
+    Instant base = patient.getCardExpiresAt().isAfter(now) ? patient.getCardExpiresAt() : now;
+    patient.setCardExpiresAt(addCardValidity(base));
+    return toCardResponse(patient);
+  }
+
+  /** Revokes the card now. A revoked card is never valid, whatever its expiry date says. */
+  @Transactional
+  public PatientCardResponse revokeCard(UUID publicId, PatientActor actor) {
+    Patient patient = loadForActor(publicId, actor, MANAGE_ROLES);
+    requireCard(patient);
+    requireNotRevoked(patient);
+    patient.setCardRevokedAt(clock.instant());
+    return toCardResponse(patient);
+  }
+
+  /**
+   * Undoes a revocation. The expiry date is untouched, so a card that expired meanwhile is EXPIRED
+   * until it is renewed.
+   */
+  @Transactional
+  public PatientCardResponse reinstateCard(UUID publicId, PatientActor actor) {
+    Patient patient = loadForActor(publicId, actor, MANAGE_ROLES);
+    requireCard(patient);
+    if (patient.getCardRevokedAt() == null) {
+      throw new ConflictException(PatientErrorCode.PATIENT_CARD_NOT_REVOKED, "Thẻ chưa bị thu hồi");
+    }
+    patient.setCardRevokedAt(null);
+    return toCardResponse(patient);
+  }
+
+  /**
+   * Replaces the identity document (type, number, issuer). The same shape rules and duplicate check
+   * as {@link #create} apply; the patient's own current document does not count as a duplicate.
+   */
+  @Transactional
+  public PatientResponse updateIdentity(
+      UUID publicId, PatientIdentityUpdateRequest request, PatientActor actor) {
+    Patient patient = loadForActor(publicId, actor, MANAGE_ROLES);
+    IdentityType identityType = request.identityType();
+    String identityNumber = normalizeIdentityNumber(request.identityNumber());
+    requireValidIdentityNumber(identityType, identityNumber);
+    String identityIssuer = clean(request.identityIssuer());
+    if (patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumberAndIdNot(
+        identityType, identityIssuer, identityNumber, patient.getId())) {
+      throw identityExists();
+    }
+    patient.setIdentityType(identityType);
+    patient.setIdentityNumber(identityNumber);
+    patient.setIdentityIssuer(identityIssuer);
+    try {
+      // saveAndFlush: surface a unique-constraint violation here and return the new updatedAt.
+      return PatientResponse.from(patientRepository.saveAndFlush(patient));
+    } catch (DataIntegrityViolationException e) {
+      throw translateUniqueViolation(e);
+    }
+  }
+
+  /**
+   * Links the calling PATIENT account to a profile created at the counter. The caller must send the
+   * profile's identity document and phone, and the profile must not belong to an account yet. Every
+   * kind of miss returns the same error, so this cannot be used to find out whether a document
+   * number is registered.
+   */
+  @Transactional
+  public PatientResponse linkAccount(PatientLinkRequest request, PatientActor actor) {
+    requireRole(actor, PATIENT_ONLY);
+    if (patientRepository.existsByUserId(actor.userId())) {
+      throw profileExists();
+    }
+    Patient patient =
+        patientRepository
+            .findByIdentityTypeAndIdentityIssuerAndIdentityNumberAndPhoneAndUserIdIsNull(
+                request.identityType(),
+                clean(request.identityIssuer()),
+                normalizeIdentityNumber(request.identityNumber()),
+                normalizePhone(request.phone()))
+            .orElseThrow(PatientService::linkNotMatched);
+    int linked;
+    try {
+      linked =
+          patientRepository.linkUserIfUnlinked(patient.getId(), actor.userId(), clock.instant());
+    } catch (DataIntegrityViolationException e) {
+      throw translateUniqueViolation(e);
+    }
+    if (linked == 0) {
+      // Another account linked the profile between the lookup and the update.
+      throw linkNotMatched();
+    }
+    return patientRepository
+        .findById(patient.getId())
+        .map(PatientResponse::from)
+        .orElseThrow(PatientService::linkNotMatched);
   }
 
   @Transactional(readOnly = true)
@@ -315,8 +419,28 @@ public class PatientService {
     ZonedDateTime now = ZonedDateTime.now(clock);
     patient.setCardNumber(generateCardNumber(now.getYear()));
     patient.setCardActivatedAt(now.toInstant());
-    // Add the year in the application zone, so the expiry lands on the same local date next year.
-    patient.setCardExpiresAt(now.plusYears(CARD_VALID_YEARS).toInstant());
+    patient.setCardExpiresAt(addCardValidity(now.toInstant()));
+  }
+
+  /** Adds the card validity in the application zone, so the expiry keeps the same local date. */
+  private Instant addCardValidity(Instant from) {
+    return from.atZone(clock.getZone()).plusYears(CARD_VALID_YEARS).toInstant();
+  }
+
+  private PatientCardResponse toCardResponse(Patient patient) {
+    return new PatientCardResponse(
+        patient.getCardNumber(),
+        patient.getCardActivatedAt(),
+        patient.getCardExpiresAt(),
+        patient.getCardRevokedAt(),
+        cardStatus(patient, clock.instant()));
+  }
+
+  private static void requireNotRevoked(Patient patient) {
+    if (patient.getCardRevokedAt() != null) {
+      throw new ConflictException(
+          PatientErrorCode.PATIENT_CARD_REVOKED, "Thẻ đã bị thu hồi, hãy mở lại thẻ trước");
+    }
   }
 
   /** {@code BN<year>-<8 random chars>}; random so numbers cannot be guessed or enumerated. */
@@ -439,6 +563,12 @@ public class PatientService {
       }
     }
     return e;
+  }
+
+  private static NotFoundException linkNotMatched() {
+    return new NotFoundException(
+        PatientErrorCode.PATIENT_LINK_NOT_MATCHED,
+        "Không tìm thấy hồ sơ khớp giấy tờ và số điện thoại, hoặc hồ sơ đã gắn tài khoản");
   }
 
   private static ConflictException profileExists() {

@@ -23,6 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -131,5 +132,35 @@ class PatientMedicalHistoryController {
       @PathVariable Long id,
       @Valid @RequestBody MedicalHistoryUpdateRequest request) {
     return ApiResult.of(historyService.update(id, request, actors.resolve(authentication)));
+  }
+
+  @GetMapping("/medical-histories/{id}")
+  @Operation(
+      summary = "Chi tiết một mục tiền sử",
+      description = "Bệnh nhân chỉ xem được mục thuộc hồ sơ của mình.")
+  @ApiResponse(
+      responseCode = "404",
+      description = "PATIENT_MEDICAL_HISTORY_NOT_FOUND",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  ApiResult<MedicalHistoryResponse> get(Authentication authentication, @PathVariable Long id) {
+    return ApiResult.of(historyService.get(id, actors.resolve(authentication)));
+  }
+
+  @DeleteMapping("/medical-histories/{id}")
+  @Operation(
+      summary = "Xóa một mục tiền sử",
+      description =
+          "Xóa vĩnh viễn. PATIENT chỉ xóa mục do chính mình tự khai; DOCTOR và MEDICAL_STAFF xóa"
+              + " được mọi mục.")
+  @ApiResponse(responseCode = "204", description = "Đã xóa, không có body")
+  @ApiResponse(
+      responseCode = "404",
+      description = "PATIENT_MEDICAL_HISTORY_NOT_FOUND",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  ResponseEntity<Void> delete(Authentication authentication, @PathVariable Long id) {
+    historyService.delete(id, actors.resolve(authentication));
+    return ResponseEntity.noContent().build();
   }
 }

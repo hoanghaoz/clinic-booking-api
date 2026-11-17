@@ -111,6 +111,66 @@ class PatientAuthorizationTest {
     histories.summary(null, ID);
   }
 
+  @Test
+  @WithMockUser(roles = {"PATIENT", "DOCTOR", "COMPANY"})
+  void onlyStaffAndAdminCanManageCardsAndIdentity() {
+    assertThatThrownBy(() -> patients.renewCard(null, ID))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThatThrownBy(() -> patients.revokeCard(null, ID))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThatThrownBy(() -> patients.reinstateCard(null, ID))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThatThrownBy(() -> patients.updateIdentity(null, ID, null))
+        .isInstanceOf(AccessDeniedException.class);
+    verifyNoInteractions(patientService);
+  }
+
+  @Test
+  @WithMockUser(roles = "MEDICAL_STAFF")
+  void staffCanManageCardsAndIdentity() {
+    patients.renewCard(null, ID);
+    patients.revokeCard(null, ID);
+    patients.reinstateCard(null, ID);
+    patients.updateIdentity(null, ID, null);
+  }
+
+  @Test
+  @WithMockUser(roles = "ADMIN")
+  void adminCanManageCardsAndIdentity() {
+    patients.renewCard(null, ID);
+    patients.revokeCard(null, ID);
+    patients.reinstateCard(null, ID);
+    patients.updateIdentity(null, ID, null);
+  }
+
+  @Test
+  @WithMockUser(roles = {"MEDICAL_STAFF", "DOCTOR", "ADMIN", "COMPANY"})
+  void onlyPatientCanLinkAccount() {
+    assertThatThrownBy(() -> patients.link(null, null)).isInstanceOf(AccessDeniedException.class);
+    verifyNoInteractions(patientService);
+  }
+
+  @Test
+  @WithMockUser(roles = "PATIENT")
+  void patientCanLinkAccount() {
+    patients.link(null, null);
+  }
+
+  @Test
+  @WithMockUser(roles = {"ADMIN", "COMPANY"})
+  void adminAndCompanyCannotReadOrDeleteSingleHistoryEntry() {
+    assertThatThrownBy(() -> histories.get(null, 1L)).isInstanceOf(AccessDeniedException.class);
+    assertThatThrownBy(() -> histories.delete(null, 1L)).isInstanceOf(AccessDeniedException.class);
+    verifyNoInteractions(historyService);
+  }
+
+  @Test
+  @WithMockUser(roles = "DOCTOR")
+  void doctorCanReadAndDeleteSingleHistoryEntry() {
+    histories.get(null, 1L);
+    histories.delete(null, 1L);
+  }
+
   @Configuration
   @EnableMethodSecurity
   static class TestConfig {

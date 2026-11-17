@@ -285,6 +285,114 @@ class PatientMedicalHistoryServiceTest {
     verify(historyRepository, never()).findById(any());
   }
 
+  // ---- get ----
+
+  @Test
+  void get_shouldReturnEntry_whenPatientReadsOwnEntryRecordedByDoctor() {
+    PatientMedicalHistory entry = entry(1L, MedicalHistoryType.ALLERGY, 3L, null);
+    when(historyRepository.findById(1L)).thenReturn(Optional.of(entry));
+
+    MedicalHistoryResponse response = service.get(1L, PATIENT);
+
+    assertThat(response.id()).isEqualTo(1L);
+    assertThat(response.source()).isEqualTo(MedicalHistorySource.DOCTOR);
+  }
+
+  @Test
+  void get_shouldThrowForbidden_whenPatientReadsAnotherPatientsEntry() {
+    when(historyRepository.findById(1L))
+        .thenReturn(Optional.of(entry(1L, MedicalHistoryType.PERSONAL, null, null)));
+
+    assertForbidden(() -> service.get(1L, OTHER_PATIENT));
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"DOCTOR", "MEDICAL_STAFF"})
+  void get_shouldAllowClinicalStaffToReadAnyEntry(UserRole role) {
+    when(historyRepository.findById(1L))
+        .thenReturn(Optional.of(entry(1L, MedicalHistoryType.PERSONAL, null, null)));
+
+    assertThat(service.get(1L, new PatientActor(5L, role)).id()).isEqualTo(1L);
+  }
+
+  @Test
+  void get_shouldThrowNotFound_whenEntryMissing() {
+    when(historyRepository.findById(9L)).thenReturn(Optional.empty());
+
+    assertNotFound(() -> service.get(9L, DOCTOR));
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"ADMIN", "COMPANY"})
+  void get_shouldThrowForbidden_whenRoleNotAllowed(UserRole role) {
+    assertForbidden(() -> service.get(1L, new PatientActor(1L, role)));
+    verify(historyRepository, never()).findById(any());
+  }
+
+  // ---- delete ----
+
+  @Test
+  void delete_shouldRemoveEntry_whenPatientDeletesOwnSelfDeclaredEntry() {
+    PatientMedicalHistory entry = entry(1L, MedicalHistoryType.PERSONAL, null, null);
+    when(historyRepository.findById(1L)).thenReturn(Optional.of(entry));
+
+    service.delete(1L, PATIENT);
+
+    verify(historyRepository).delete(entry);
+  }
+
+  @Test
+  void delete_shouldThrowForbidden_whenPatientDeletesEntryRecordedByStaff() {
+    when(historyRepository.findById(1L))
+        .thenReturn(Optional.of(entry(1L, MedicalHistoryType.PERSONAL, null, 4L)));
+
+    assertForbidden(() -> service.delete(1L, PATIENT));
+    verify(historyRepository, never()).delete(any());
+  }
+
+  @Test
+  void delete_shouldThrowForbidden_whenPatientDeletesAnotherPatientsEntry() {
+    when(historyRepository.findById(1L))
+        .thenReturn(Optional.of(entry(1L, MedicalHistoryType.PERSONAL, null, null)));
+
+    assertForbidden(() -> service.delete(1L, OTHER_PATIENT));
+    verify(historyRepository, never()).delete(any());
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"DOCTOR", "MEDICAL_STAFF"})
+  void delete_shouldAllowClinicalStaffToDeleteAnyEntry(UserRole role) {
+    PatientMedicalHistory entry = entry(1L, MedicalHistoryType.ALLERGY, 3L, null);
+    when(historyRepository.findById(1L)).thenReturn(Optional.of(entry));
+
+    service.delete(1L, new PatientActor(5L, role));
+
+    verify(historyRepository).delete(entry);
+  }
+
+  @Test
+  void delete_shouldThrowNotFound_whenEntryMissing() {
+    when(historyRepository.findById(9L)).thenReturn(Optional.empty());
+
+    assertNotFound(() -> service.delete(9L, STAFF));
+    verify(historyRepository, never()).delete(any());
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"ADMIN", "COMPANY"})
+  void delete_shouldThrowForbidden_whenRoleNotAllowed(UserRole role) {
+    assertForbidden(() -> service.delete(1L, new PatientActor(1L, role)));
+    verify(historyRepository, never()).findById(any());
+  }
+
   // ---- list / summary ----
 
   @Test
@@ -432,6 +540,15 @@ class PatientMedicalHistoryServiceTest {
   private static MedicalHistoryCreateRequest create(
       MedicalHistoryType type, String description, String relationship) {
     return new MedicalHistoryCreateRequest(type, description, relationship);
+  }
+
+  private static void assertNotFound(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+    assertThatThrownBy(call)
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e ->
+                assertThat(e.getErrorCode())
+                    .isEqualTo(PatientErrorCode.PATIENT_MEDICAL_HISTORY_NOT_FOUND));
   }
 
   private static void assertForbidden(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
