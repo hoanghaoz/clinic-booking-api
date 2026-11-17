@@ -1,5 +1,6 @@
 package com.se100.clinic.auth;
 
+import com.se100.clinic.auth.enums.UserRole;
 import com.se100.clinic.auth.enums.UserStatus;
 import jakarta.persistence.EntityManager;
 import java.util.List;
@@ -46,6 +47,16 @@ public class AuthenticatedUserService {
             user ->
                 new AuthDtos.AccountIdentity(
                     user.getId(), user.getUsername(), user.getRole().name()))
+        .findFirst();
+  }
+
+  /** Role of the account with this internal id, or empty when no such account exists. */
+  @Transactional(readOnly = true)
+  public Optional<UserRole> roleForUserId(Long userId) {
+    return entityManager
+        .createQuery("select u.role from User u where u.id = :id", UserRole.class)
+        .setParameter("id", userId)
+        .getResultStream()
         .findFirst();
   }
 }
