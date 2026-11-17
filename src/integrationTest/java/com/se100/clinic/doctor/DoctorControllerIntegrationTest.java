@@ -117,7 +117,26 @@ class DoctorControllerIntegrationTest extends AbstractAdminIntegrationTest {
     long specialty = newSpecialty(tag);
     create(new CreateDoctorRequest(userId, tag, "A", "BS", List.of(specialty)));
 
-    // Unknown account -> FK fk_doctors_user_id.
+    // Account exists but is a patient -> cannot be linked to a doctor profile.
+    String patientName = "p" + UUID.randomUUID().toString().replace("-", "");
+    long patientAccount =
+        jdbc.queryForObject(
+            """
+            insert into users (public_id, username, email, password_hashed, role)
+            values (gen_random_uuid(), ?, ?, 'x', 'PATIENT') returning id
+            """,
+            Long.class,
+            patientName,
+            patientName + "@test.local");
+    var notDoctor =
+        send(
+            HttpMethod.POST,
+            BASE,
+            new CreateDoctorRequest(patientAccount, tag + "P", "A", "BS", List.of(specialty)));
+    assertThat(notDoctor.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(notDoctor.getBody()).containsEntry("code", "DOCTOR_USER_NOT_DOCTOR");
+
+    // Unknown account.
     var unknownUser =
         send(
             HttpMethod.POST,
