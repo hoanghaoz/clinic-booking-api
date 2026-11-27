@@ -48,8 +48,15 @@ class CatalogAuthorizationTest {
 
   @Test
   @WithAnonymousUser
-  void anonymousUserCannotReadPackage() {
-    assertThatThrownBy(() -> packages.getMedicalPackage(UUID.randomUUID()))
+  void anonymousUserCanReadPackage() {
+    // The current version is public; the public GET matcher lives in SecurityConfig.
+    packages.getMedicalPackage(UUID.randomUUID());
+  }
+
+  @Test
+  @WithAnonymousUser
+  void anonymousUserCannotReadPackageVersion() {
+    assertThatThrownBy(() -> packages.getVersion(UUID.randomUUID(), "v1.0"))
         .isInstanceOf(AccessDeniedException.class);
     verifyNoInteractions(packageService);
   }
