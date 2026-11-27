@@ -86,6 +86,8 @@ public class SecurityConfig {
               auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
               auth.requestMatchers("/api/v1/appointments", "/api/v1/appointments/**")
                   .authenticated();
+              auth.requestMatchers("/api/v1/notifications", "/api/v1/notifications/**")
+                  .authenticated();
               auth.requestMatchers(HttpMethod.GET, PUBLIC_READ_ENDPOINTS).permitAll();
               if (tokens != null || production) {
                 auth.anyRequest().authenticated();
