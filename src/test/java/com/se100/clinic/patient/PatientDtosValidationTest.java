@@ -3,6 +3,8 @@ package com.se100.clinic.patient;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.se100.clinic.patient.PatientDtos.PatientCreateRequest;
+import com.se100.clinic.patient.PatientDtos.PatientIdentityUpdateRequest;
+import com.se100.clinic.patient.PatientDtos.PatientLinkRequest;
 import com.se100.clinic.patient.PatientDtos.PatientUpdateRequest;
 import com.se100.clinic.patient.enums.Gender;
 import com.se100.clinic.patient.enums.IdentityType;
@@ -118,5 +120,41 @@ class PatientDtosValidationTest {
                 .collect(Collectors.toSet()))
         .containsExactlyInAnyOrder(
             "fullName", "dateOfBirth", "gender", "phone", "contactEmail", "address");
+  }
+
+  @Test
+  void identityUpdate_shouldRejectMissingFields() {
+    var violations = VALIDATOR.validate(new PatientIdentityUpdateRequest(null, " ", ""));
+
+    assertThat(violations)
+        .extracting(violation -> violation.getPropertyPath().toString())
+        .containsExactlyInAnyOrder("identityType", "identityNumber", "identityIssuer");
+  }
+
+  @Test
+  void identityUpdate_shouldAcceptTypicalRequest() {
+    assertThat(
+            VALIDATOR.validate(
+                new PatientIdentityUpdateRequest(IdentityType.CCCD, "079123456789", "Cục CSQLHC")))
+        .isEmpty();
+  }
+
+  @Test
+  void link_shouldRejectMissingFieldsAndBadPhone() {
+    var violations =
+        VALIDATOR.validate(new PatientLinkRequest(null, "", "Cục CSQLHC", "not-a-phone"));
+
+    assertThat(violations)
+        .extracting(violation -> violation.getPropertyPath().toString())
+        .containsExactlyInAnyOrder("identityType", "identityNumber", "phone");
+  }
+
+  @Test
+  void link_shouldAcceptPhoneWithSeparators() {
+    assertThat(
+            VALIDATOR.validate(
+                new PatientLinkRequest(
+                    IdentityType.CCCD, "079123456789", "Cục CSQLHC", "090 123-4567")))
+        .isEmpty();
   }
 }

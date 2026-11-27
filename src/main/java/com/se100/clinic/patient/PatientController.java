@@ -4,6 +4,8 @@ import com.se100.clinic.patient.PatientDtos.PatientCardResponse;
 import com.se100.clinic.patient.PatientDtos.PatientCardValidityResponse;
 import com.se100.clinic.patient.PatientDtos.PatientClassUpdateRequest;
 import com.se100.clinic.patient.PatientDtos.PatientCreateRequest;
+import com.se100.clinic.patient.PatientDtos.PatientIdentityUpdateRequest;
+import com.se100.clinic.patient.PatientDtos.PatientLinkRequest;
 import com.se100.clinic.patient.PatientDtos.PatientResponse;
 import com.se100.clinic.patient.PatientDtos.PatientUpdateRequest;
 import com.se100.clinic.shared.PageParams;
@@ -53,6 +55,8 @@ class PatientController {
   // Everyone except COMPANY.
   private static final String READ = "hasAnyRole('PATIENT','DOCTOR','MEDICAL_STAFF','ADMIN')";
   private static final String CARD = "hasAnyRole('PATIENT','MEDICAL_STAFF','ADMIN')";
+  // Card actions and identity fixes: staff at the counter and admins.
+  private static final String MANAGE = "hasAnyRole('MEDICAL_STAFF','ADMIN')";
 
   private final PatientService patientService;
   private final PatientActorResolver actors;
@@ -214,5 +218,113 @@ class PatientController {
   ApiResult<PatientCardValidityResponse> cardValidity(
       Authentication authentication, @PathVariable UUID publicId) {
     return ApiResult.of(patientService.checkCardValidity(publicId, actors.resolve(authentication)));
+  }
+
+  @PostMapping("/link")
+  @PreAuthorize("hasRole('PATIENT')")
+  @Operation(
+      summary = "Bệnh nhân gắn tài khoản với hồ sơ do quầy tạo",
+      description =
+          "Gửi loại, nơi cấp, số giấy tờ và số điện thoại đúng với hồ sơ đã tạo tại quầy. Hồ sơ"
+              + " phải chưa gắn tài khoản nào và tài khoản này chưa có hồ sơ. Mọi trường hợp không"
+              + " khớp đều trả cùng một lỗi để không lộ hồ sơ nào đã tồn tại.")
+  @ApiResponse(
+      responseCode = "404",
+      description = "PATIENT_LINK_NOT_MATCHED — không có hồ sơ khớp hoặc hồ sơ đã gắn tài khoản",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  @ApiResponse(
+      responseCode = "409",
+      description = "PATIENT_PROFILE_EXISTS — tài khoản đã có hồ sơ",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  ApiResult<PatientResponse> link(
+      Authentication authentication, @Valid @RequestBody PatientLinkRequest request) {
+    return ApiResult.of(patientService.linkAccount(request, actors.resolve(authentication)));
+  }
+
+  @PutMapping("/{publicId}/identity")
+  @PreAuthorize(MANAGE)
+  @Operation(
+      summary = "Sửa giấy tờ định danh của bệnh nhân",
+      description =
+          "Đổi loại, số và nơi cấp giấy tờ; số giấy tờ phải đúng dạng theo loại. Chỉ nhân viên y tế"
+              + " và ADMIN.")
+  @ApiResponse(
+      responseCode = "404",
+      description = "PATIENT_NOT_FOUND",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  @ApiResponse(
+      responseCode = "409",
+      description = "PATIENT_IDENTITY_EXISTS — giấy tờ đã đăng ký cho hồ sơ khác",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  ApiResult<PatientResponse> updateIdentity(
+      Authentication authentication,
+      @PathVariable UUID publicId,
+      @Valid @RequestBody PatientIdentityUpdateRequest request) {
+    return ApiResult.of(
+        patientService.updateIdentity(publicId, request, actors.resolve(authentication)));
+  }
+
+  @PostMapping("/{publicId}/card/renew")
+  @PreAuthorize(MANAGE)
+  @Operation(
+      summary = "Gia hạn thẻ thêm 1 năm",
+      description =
+          "Tính từ ngày hết hạn hiện tại nếu thẻ còn hạn, hoặc từ bây giờ nếu đã hết hạn. Thẻ đã"
+              + " bị thu hồi phải mở lại trước.")
+  @ApiResponse(
+      responseCode = "404",
+      description = "PATIENT_NOT_FOUND hoặc PATIENT_CARD_NOT_FOUND",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  @ApiResponse(
+      responseCode = "409",
+      description = "PATIENT_CARD_REVOKED — thẻ đã bị thu hồi",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  ApiResult<PatientCardResponse> renewCard(
+      Authentication authentication, @PathVariable UUID publicId) {
+    return ApiResult.of(patientService.renewCard(publicId, actors.resolve(authentication)));
+  }
+
+  @PostMapping("/{publicId}/card/revoke")
+  @PreAuthorize(MANAGE)
+  @Operation(summary = "Thu hồi thẻ bệnh nhân")
+  @ApiResponse(
+      responseCode = "404",
+      description = "PATIENT_NOT_FOUND hoặc PATIENT_CARD_NOT_FOUND",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  @ApiResponse(
+      responseCode = "409",
+      description = "PATIENT_CARD_REVOKED — thẻ đã bị thu hồi từ trước",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  ApiResult<PatientCardResponse> revokeCard(
+      Authentication authentication, @PathVariable UUID publicId) {
+    return ApiResult.of(patientService.revokeCard(publicId, actors.resolve(authentication)));
+  }
+
+  @PostMapping("/{publicId}/card/reinstate")
+  @PreAuthorize(MANAGE)
+  @Operation(
+      summary = "Mở lại thẻ đã thu hồi",
+      description = "Không đổi ngày hết hạn; thẻ đã quá hạn vẫn là EXPIRED cho đến khi gia hạn.")
+  @ApiResponse(
+      responseCode = "404",
+      description = "PATIENT_NOT_FOUND hoặc PATIENT_CARD_NOT_FOUND",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  @ApiResponse(
+      responseCode = "409",
+      description = "PATIENT_CARD_NOT_REVOKED — thẻ chưa bị thu hồi",
+      content =
+          @Content(mediaType = ApiDocs.PROBLEM_JSON, schema = @Schema(ref = ApiDocs.ERROR_SCHEMA)))
+  ApiResult<PatientCardResponse> reinstateCard(
+      Authentication authentication, @PathVariable UUID publicId) {
+    return ApiResult.of(patientService.reinstateCard(publicId, actors.resolve(authentication)));
   }
 }

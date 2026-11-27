@@ -3,11 +3,14 @@ package com.se100.clinic.patient;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -178,5 +181,26 @@ class PatientMedicalHistoryControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     verifyNoInteractions(historyService);
+  }
+
+  @Test
+  void get_returns200_withDataEnvelope() throws Exception {
+    when(historyService.get(5L, ACTOR)).thenReturn(entry(5, MedicalHistoryType.ALLERGY));
+
+    mockMvc
+        .perform(get("/api/v1/medical-histories/5").principal(AUTH))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.id").value(5))
+        .andExpect(jsonPath("$.data.type").value("ALLERGY"));
+  }
+
+  @Test
+  void delete_returns204_withEmptyBody() throws Exception {
+    mockMvc
+        .perform(delete("/api/v1/medical-histories/5").principal(AUTH))
+        .andExpect(status().isNoContent())
+        .andExpect(content().string(""));
+
+    verify(historyService).delete(5L, ACTOR);
   }
 }

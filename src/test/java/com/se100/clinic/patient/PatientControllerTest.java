@@ -345,4 +345,108 @@ class PatientControllerTest {
         .andExpect(jsonPath("$.data.valid").value(true))
         .andExpect(jsonPath("$.data.daysRemaining").value(12));
   }
+
+  private static PatientCardResponse card(PatientCardStatus status, Instant revokedAt) {
+    return new PatientCardResponse(
+        "BN2026-ABCDEFGH", Instant.EPOCH, Instant.parse("2027-01-01T00:00:00Z"), revokedAt, status);
+  }
+
+  @Test
+  void renewCard_returns200_withCard() throws Exception {
+    when(patientService.renewCard(PUBLIC_ID, ACTOR))
+        .thenReturn(card(PatientCardStatus.ACTIVE, null));
+
+    mockMvc
+        .perform(post("/api/v1/patients/" + PUBLIC_ID + "/card/renew").principal(AUTH))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+        .andExpect(jsonPath("$.data.cardNumber").value("BN2026-ABCDEFGH"));
+  }
+
+  @Test
+  void revokeCard_returns200_withRevokedStatus() throws Exception {
+    when(patientService.revokeCard(PUBLIC_ID, ACTOR))
+        .thenReturn(card(PatientCardStatus.REVOKED, Instant.EPOCH));
+
+    mockMvc
+        .perform(post("/api/v1/patients/" + PUBLIC_ID + "/card/revoke").principal(AUTH))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.status").value("REVOKED"));
+  }
+
+  @Test
+  void reinstateCard_returns200_withCard() throws Exception {
+    when(patientService.reinstateCard(PUBLIC_ID, ACTOR))
+        .thenReturn(card(PatientCardStatus.ACTIVE, null));
+
+    mockMvc
+        .perform(post("/api/v1/patients/" + PUBLIC_ID + "/card/reinstate").principal(AUTH))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+  }
+
+  @Test
+  void updateIdentity_returns200_withPatient() throws Exception {
+    when(patientService.updateIdentity(eq(PUBLIC_ID), any(), eq(ACTOR))).thenReturn(response());
+
+    mockMvc
+        .perform(
+            put("/api/v1/patients/" + PUBLIC_ID + "/identity")
+                .principal(AUTH)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"identityType\":\"CCCD\",\"identityNumber\":\"079123456789\","
+                        + "\"identityIssuer\":\"Cục CSQLHC\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.identityNumber").value("079123456789"));
+  }
+
+  @Test
+  void updateIdentity_withEmptyBody_returns400_andNeverCallsService() throws Exception {
+    mockMvc
+        .perform(
+            put("/api/v1/patients/" + PUBLIC_ID + "/identity")
+                .principal(AUTH)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+        .andExpect(jsonPath("$.errors.length()").value(3));
+    verifyNoInteractions(patientService);
+  }
+
+  @Test
+  void link_returns200_withPatient() throws Exception {
+    when(patientService.linkAccount(any(), eq(ACTOR))).thenReturn(response());
+
+    mockMvc
+        .perform(
+            post("/api/v1/patients/link")
+                .principal(AUTH)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(LINK_BODY))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.publicId").value(PUBLIC_ID.toString()));
+  }
+
+  @Test
+  void link_withMissingPhone_returns400_andNeverCallsService() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/patients/link")
+                .principal(AUTH)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"identityType\":\"CCCD\",\"identityNumber\":\"079123456789\","
+                        + "\"identityIssuer\":\"Cục CSQLHC\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].field").value("phone"));
+    verifyNoInteractions(patientService);
+  }
+
+  private static final String LINK_BODY =
+      """
+      {"identityType":"CCCD","identityNumber":"079123456789",
+       "identityIssuer":"Cục CSQLHC","phone":"0901234567"}
+      """;
 }

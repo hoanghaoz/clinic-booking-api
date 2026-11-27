@@ -11,6 +11,8 @@ import com.se100.clinic.auth.enums.UserRole;
 import com.se100.clinic.patient.PatientDtos.PatientCardResponse;
 import com.se100.clinic.patient.PatientDtos.PatientCardValidityResponse;
 import com.se100.clinic.patient.PatientDtos.PatientCreateRequest;
+import com.se100.clinic.patient.PatientDtos.PatientIdentityUpdateRequest;
+import com.se100.clinic.patient.PatientDtos.PatientLinkRequest;
 import com.se100.clinic.patient.PatientDtos.PatientResponse;
 import com.se100.clinic.patient.PatientDtos.PatientUpdateRequest;
 import com.se100.clinic.patient.enums.Gender;
@@ -950,7 +952,333 @@ class PatientServiceTest {
             e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_NOT_FOUND));
   }
 
+  // ---- card renew / revoke / reinstate ----
+
+  @Test
+  void renewCard_shouldAddOneYearToCurrentExpiry_whenCardStillValid() {
+    Patient patient =
+        patientWithCard(
+            7L, Instant.parse("2026-03-01T03:00:00Z"), Instant.parse("2027-03-01T03:00:00Z"));
+    stubFind(patient);
+
+    PatientCardResponse response = patientService.renewCard(PUBLIC_ID, STAFF);
+
+    assertThat(response.expiresAt()).isEqualTo(Instant.parse("2028-03-01T03:00:00Z"));
+    assertThat(patient.getCardExpiresAt()).isEqualTo(Instant.parse("2028-03-01T03:00:00Z"));
+    assertThat(patient.getCardNumber()).isEqualTo("BN2026-ABCDEFGH");
+    assertThat(response.status()).isEqualTo(PatientCardStatus.ACTIVE);
+  }
+
+  @Test
+  void renewCard_shouldRestartFromNow_whenCardAlreadyExpired() {
+    Patient patient =
+        patientWithCard(
+            7L, Instant.parse("2025-01-01T03:00:00Z"), Instant.parse("2026-01-01T03:00:00Z"));
+    stubFind(patient);
+
+    PatientCardResponse response = patientService.renewCard(PUBLIC_ID, ADMIN);
+
+    assertThat(response.expiresAt()).isEqualTo(NEXT_YEAR);
+    assertThat(response.status()).isEqualTo(PatientCardStatus.ACTIVE);
+  }
+
+  @Test
+  void renewCard_shouldThrowConflict_whenCardRevoked() {
+    Patient patient = patientWithCard(7L, NOW.minus(Duration.ofDays(10)), NEXT_YEAR);
+    patient.setCardRevokedAt(NOW.minus(Duration.ofDays(1)));
+    stubFind(patient);
+
+    assertThatThrownBy(() -> patientService.renewCard(PUBLIC_ID, STAFF))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_CARD_REVOKED));
+    assertThat(patient.getCardExpiresAt()).isEqualTo(NEXT_YEAR);
+  }
+
+  @Test
+  void renewCard_shouldThrowNotFound_whenPatientHasNoCard() {
+    stubFind(patient(7L));
+
+    assertThatThrownBy(() -> patientService.renewCard(PUBLIC_ID, STAFF))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_CARD_NOT_FOUND));
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"PATIENT", "DOCTOR", "COMPANY"})
+  void cardActions_shouldThrowForbidden_whenRoleNotAllowed(UserRole role) {
+    var actor = new PatientActor(7L, role);
+
+    assertForbidden(() -> patientService.renewCard(PUBLIC_ID, actor));
+    assertForbidden(() -> patientService.revokeCard(PUBLIC_ID, actor));
+    assertForbidden(() -> patientService.reinstateCard(PUBLIC_ID, actor));
+    verify(patientRepository, never()).findByPublicId(any());
+  }
+
+  @Test
+  void revokeCard_shouldSetRevokedAtAndReportRevoked() {
+    Patient patient = patientWithCard(7L, NOW.minus(Duration.ofDays(10)), NEXT_YEAR);
+    stubFind(patient);
+
+    PatientCardResponse response = patientService.revokeCard(PUBLIC_ID, STAFF);
+
+    assertThat(patient.getCardRevokedAt()).isEqualTo(NOW);
+    assertThat(response.status()).isEqualTo(PatientCardStatus.REVOKED);
+    assertThat(response.revokedAt()).isEqualTo(NOW);
+  }
+
+  @Test
+  void revokeCard_shouldThrowConflict_whenAlreadyRevoked() {
+    Patient patient = patientWithCard(7L, NOW.minus(Duration.ofDays(10)), NEXT_YEAR);
+    patient.setCardRevokedAt(NOW.minus(Duration.ofDays(2)));
+    stubFind(patient);
+
+    assertThatThrownBy(() -> patientService.revokeCard(PUBLIC_ID, ADMIN))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_CARD_REVOKED));
+    assertThat(patient.getCardRevokedAt()).isEqualTo(NOW.minus(Duration.ofDays(2)));
+  }
+
+  @Test
+  void reinstateCard_shouldClearRevocationAndKeepExpiry() {
+    Patient patient = patientWithCard(7L, NOW.minus(Duration.ofDays(10)), NEXT_YEAR);
+    patient.setCardRevokedAt(NOW.minus(Duration.ofDays(1)));
+    stubFind(patient);
+
+    PatientCardResponse response = patientService.reinstateCard(PUBLIC_ID, STAFF);
+
+    assertThat(patient.getCardRevokedAt()).isNull();
+    assertThat(response.expiresAt()).isEqualTo(NEXT_YEAR);
+    assertThat(response.status()).isEqualTo(PatientCardStatus.ACTIVE);
+  }
+
+  @Test
+  void reinstateCard_shouldStayExpired_whenRevokedCardAlreadyPastExpiry() {
+    Patient patient =
+        patientWithCard(
+            7L, Instant.parse("2025-01-01T03:00:00Z"), Instant.parse("2026-01-01T03:00:00Z"));
+    patient.setCardRevokedAt(Instant.parse("2025-06-01T03:00:00Z"));
+    stubFind(patient);
+
+    PatientCardResponse response = patientService.reinstateCard(PUBLIC_ID, STAFF);
+
+    assertThat(response.status()).isEqualTo(PatientCardStatus.EXPIRED);
+  }
+
+  @Test
+  void reinstateCard_shouldThrowConflict_whenCardNotRevoked() {
+    stubFind(patientWithCard(7L, NOW.minus(Duration.ofDays(10)), NEXT_YEAR));
+
+    assertThatThrownBy(() -> patientService.reinstateCard(PUBLIC_ID, STAFF))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_CARD_NOT_REVOKED));
+  }
+
+  // ---- update identity ----
+
+  @Test
+  void updateIdentity_shouldStoreNormalizedDocument_whenValid() {
+    Patient patient = patient(null);
+    patient.setId(5L);
+    stubFind(patient);
+    when(patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumberAndIdNot(
+            IdentityType.PASSPORT, "Cục QLXNC", "B1234567", 5L))
+        .thenReturn(false);
+    when(patientRepository.saveAndFlush(patient)).thenReturn(patient);
+
+    PatientResponse response =
+        patientService.updateIdentity(
+            PUBLIC_ID,
+            new PatientIdentityUpdateRequest(IdentityType.PASSPORT, " b12 34567 ", " Cục QLXNC "),
+            STAFF);
+
+    assertThat(patient.getIdentityType()).isEqualTo(IdentityType.PASSPORT);
+    assertThat(patient.getIdentityNumber()).isEqualTo("B1234567");
+    assertThat(patient.getIdentityIssuer()).isEqualTo("Cục QLXNC");
+    assertThat(response.identityNumber()).isEqualTo("B1234567");
+  }
+
+  @Test
+  void updateIdentity_shouldThrowConflict_whenAnotherPatientHasTheDocument() {
+    Patient patient = patient(null);
+    patient.setId(5L);
+    stubFind(patient);
+    when(patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumberAndIdNot(
+            IdentityType.CCCD, "Cục CSQLHC", "079999999999", 5L))
+        .thenReturn(true);
+
+    assertThatThrownBy(
+            () ->
+                patientService.updateIdentity(
+                    PUBLIC_ID,
+                    new PatientIdentityUpdateRequest(
+                        IdentityType.CCCD, "079999999999", "Cục CSQLHC"),
+                    ADMIN))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_IDENTITY_EXISTS));
+    assertThat(patient.getIdentityNumber()).isEqualTo("079123456789");
+    verify(patientRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void updateIdentity_shouldThrowValidation_whenNumberHasWrongShapeForType() {
+    stubFind(patient(null));
+
+    assertThatThrownBy(
+            () ->
+                patientService.updateIdentity(
+                    PUBLIC_ID,
+                    new PatientIdentityUpdateRequest(IdentityType.CCCD, "12345", "Cục CSQLHC"),
+                    STAFF))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> {
+              assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.VALIDATION_ERROR);
+              assertThat(e.getViolations())
+                  .extracting(violation -> violation.field())
+                  .containsExactly("identityNumber");
+            });
+    verify(patientRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void updateIdentity_shouldTranslateUniqueViolation_whenRaceOnDocument() {
+    Patient patient = patient(null);
+    patient.setId(5L);
+    stubFind(patient);
+    when(patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumberAndIdNot(
+            any(), any(), any(), any()))
+        .thenReturn(false);
+    when(patientRepository.saveAndFlush(patient))
+        .thenThrow(uniqueViolation("uk_patients_identity"));
+
+    assertThatThrownBy(
+            () ->
+                patientService.updateIdentity(
+                    PUBLIC_ID,
+                    new PatientIdentityUpdateRequest(
+                        IdentityType.CCCD, "079999999999", "Cục CSQLHC"),
+                    STAFF))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_IDENTITY_EXISTS));
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"PATIENT", "DOCTOR", "COMPANY"})
+  void updateIdentity_shouldThrowForbidden_whenRoleNotAllowed(UserRole role) {
+    assertForbidden(
+        () ->
+            patientService.updateIdentity(
+                PUBLIC_ID,
+                new PatientIdentityUpdateRequest(IdentityType.CCCD, "079123456789", "Cục CSQLHC"),
+                new PatientActor(7L, role)));
+    verify(patientRepository, never()).findByPublicId(any());
+  }
+
+  // ---- link account ----
+
+  @Test
+  void linkAccount_shouldLinkWalkInProfile_whenDocumentAndPhoneMatch() {
+    Patient walkIn = patient(null);
+    walkIn.setId(5L);
+    Patient linked = patient(7L);
+    linked.setId(5L);
+    when(patientRepository.existsByUserId(7L)).thenReturn(false);
+    when(patientRepository
+            .findByIdentityTypeAndIdentityIssuerAndIdentityNumberAndPhoneAndUserIdIsNull(
+                IdentityType.CCCD, "Cục CSQLHC", "079123456789", "0901234567"))
+        .thenReturn(Optional.of(walkIn));
+    when(patientRepository.linkUserIfUnlinked(5L, 7L, NOW)).thenReturn(1);
+    when(patientRepository.findById(5L)).thenReturn(Optional.of(linked));
+
+    PatientResponse response = patientService.linkAccount(linkRequest(), PATIENT);
+
+    assertThat(response.identityNumber()).isEqualTo("079123456789");
+    verify(patientRepository).linkUserIfUnlinked(5L, 7L, NOW);
+  }
+
+  @Test
+  void linkAccount_shouldThrowNotMatched_whenNoWalkInProfileMatches() {
+    when(patientRepository.existsByUserId(7L)).thenReturn(false);
+    when(patientRepository
+            .findByIdentityTypeAndIdentityIssuerAndIdentityNumberAndPhoneAndUserIdIsNull(
+                any(), any(), any(), any()))
+        .thenReturn(Optional.empty());
+
+    assertLinkNotMatched(() -> patientService.linkAccount(linkRequest(), PATIENT));
+    verify(patientRepository, never()).linkUserIfUnlinked(any(), any(), any());
+  }
+
+  @Test
+  void linkAccount_shouldThrowNotMatched_whenAnotherAccountLinkedFirst() {
+    Patient walkIn = patient(null);
+    walkIn.setId(5L);
+    when(patientRepository.existsByUserId(7L)).thenReturn(false);
+    when(patientRepository
+            .findByIdentityTypeAndIdentityIssuerAndIdentityNumberAndPhoneAndUserIdIsNull(
+                any(), any(), any(), any()))
+        .thenReturn(Optional.of(walkIn));
+    when(patientRepository.linkUserIfUnlinked(5L, 7L, NOW)).thenReturn(0);
+
+    assertLinkNotMatched(() -> patientService.linkAccount(linkRequest(), PATIENT));
+  }
+
+  @Test
+  void linkAccount_shouldThrowConflict_whenAccountAlreadyHasProfile() {
+    when(patientRepository.existsByUserId(7L)).thenReturn(true);
+
+    assertThatThrownBy(() -> patientService.linkAccount(linkRequest(), PATIENT))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_PROFILE_EXISTS));
+    verify(patientRepository, never()).linkUserIfUnlinked(any(), any(), any());
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = UserRole.class,
+      names = {"MEDICAL_STAFF", "ADMIN", "DOCTOR", "COMPANY"})
+  void linkAccount_shouldThrowForbidden_whenRoleIsNotPatient(UserRole role) {
+    assertForbidden(() -> patientService.linkAccount(linkRequest(), new PatientActor(20L, role)));
+    verify(patientRepository, never()).existsByUserId(any());
+  }
+
   // ---- helpers ----
+
+  private static final UUID PUBLIC_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+
+  private void stubFind(Patient patient) {
+    when(patientRepository.findByPublicId(PUBLIC_ID)).thenReturn(Optional.of(patient));
+  }
+
+  private static PatientLinkRequest linkRequest() {
+    return new PatientLinkRequest(
+        IdentityType.CCCD, " 079 123456789 ", " Cục CSQLHC ", "090 123-4567");
+  }
+
+  private static void assertLinkNotMatched(
+      org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+    assertThatThrownBy(call)
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(PatientErrorCode.PATIENT_LINK_NOT_MATCHED));
+  }
+
+  private static void assertForbidden(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+    assertThatThrownBy(call)
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
+  }
 
   private void stubCreateHappyPath(IdentityType type, String storedNumber) {
     when(patientRepository.existsByIdentityTypeAndIdentityIssuerAndIdentityNumber(

@@ -78,6 +78,30 @@ public final class PatientDtos {
           @Size(max = 500, message = "Địa chỉ tối đa 500 ký tự")
           String address) {}
 
+  // MEDICAL_STAFF and ADMIN only. The number's shape for its type is checked in PatientService.
+  public record PatientIdentityUpdateRequest(
+      @NotNull(message = "Loại giấy tờ không được để trống") IdentityType identityType,
+      @NotBlank(message = "Số giấy tờ không được để trống")
+          @Size(max = 40, message = "Số giấy tờ tối đa 40 ký tự")
+          String identityNumber,
+      @NotBlank(message = "Nơi cấp giấy tờ không được để trống")
+          @Size(max = 80, message = "Nơi cấp giấy tờ tối đa 80 ký tự")
+          String identityIssuer) {}
+
+  // A PATIENT proves they own a counter-created profile by knowing both its document and its phone.
+  public record PatientLinkRequest(
+      @NotNull(message = "Loại giấy tờ không được để trống") IdentityType identityType,
+      @NotBlank(message = "Số giấy tờ không được để trống")
+          @Size(max = 40, message = "Số giấy tờ tối đa 40 ký tự")
+          String identityNumber,
+      @NotBlank(message = "Nơi cấp giấy tờ không được để trống")
+          @Size(max = 80, message = "Nơi cấp giấy tờ tối đa 80 ký tự")
+          String identityIssuer,
+      @NotBlank(message = "Số điện thoại không được để trống")
+          @Size(max = 25, message = "Số điện thoại tối đa 25 ký tự")
+          @Pattern(regexp = PHONE_REGEX, message = "Số điện thoại không hợp lệ")
+          String phone) {}
+
   // ADMIN-only. Only PERSONAL and VIP are assignable here; COMPANY is owned by the company module
   // and the future service must reject it.
   public record PatientClassUpdateRequest(

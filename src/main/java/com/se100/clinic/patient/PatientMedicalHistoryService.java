@@ -106,20 +106,7 @@ public class PatientMedicalHistoryService {
   public MedicalHistoryResponse update(
       Long historyId, MedicalHistoryUpdateRequest request, PatientActor actor) {
     requireRole(actor, ACCESS_ROLES);
-    PatientMedicalHistory history =
-        historyRepository
-            .findById(historyId)
-            .orElseThrow(
-                () ->
-                    new NotFoundException(
-                        PatientErrorCode.PATIENT_MEDICAL_HISTORY_NOT_FOUND,
-                        "Không tìm thấy mục tiền sử"));
-    if (actor.role() == UserRole.PATIENT) {
-      requireOwnerIfPatient(actor, history.getPatient());
-      if (MedicalHistoryResponse.sourceOf(history) != MedicalHistorySource.PATIENT) {
-        throw forbidden();
-      }
-    }
+    PatientMedicalHistory history = loadEntryForModify(historyId, actor);
     String relationship = normalizeRelationship(request.familyRelationship());
     validateRelationship(history.getType(), relationship);
 
@@ -127,6 +114,28 @@ public class PatientMedicalHistoryService {
     history.setFamilyRelationship(relationship);
     // saveAndFlush so the returned updatedAt is the new value, not the stale one.
     return MedicalHistoryResponse.from(historyRepository.saveAndFlush(history));
+  }
+
+  /**
+   * One entry by id. A PATIENT may read any entry on their own profile, whoever recorded it; DOCTOR
+   * and MEDICAL_STAFF may read any entry.
+   */
+  @Transactional(readOnly = true)
+  public MedicalHistoryResponse get(Long historyId, PatientActor actor) {
+    requireRole(actor, ACCESS_ROLES);
+    PatientMedicalHistory history = findEntry(historyId);
+    requireOwnerIfPatient(actor, history.getPatient());
+    return MedicalHistoryResponse.from(history);
+  }
+
+  /**
+   * Permanently deletes an entry. Same rule as {@link #update}: a PATIENT may only delete entries
+   * they declared themselves on their own profile; DOCTOR and MEDICAL_STAFF may delete any entry.
+   */
+  @Transactional
+  public void delete(Long historyId, PatientActor actor) {
+    requireRole(actor, ACCESS_ROLES);
+    historyRepository.delete(loadEntryForModify(historyId, actor));
   }
 
   /**
@@ -184,6 +193,31 @@ public class PatientMedicalHistoryService {
         .filter(history -> history.getType() == type)
         .map(MedicalHistoryResponse::from)
         .toList();
+  }
+
+  private PatientMedicalHistory findEntry(Long historyId) {
+    return historyRepository
+        .findById(historyId)
+        .orElseThrow(
+            () ->
+                new NotFoundException(
+                    PatientErrorCode.PATIENT_MEDICAL_HISTORY_NOT_FOUND,
+                    "Không tìm thấy mục tiền sử"));
+  }
+
+  /**
+   * Loads an entry the actor wants to change or delete. A PATIENT is limited to their own
+   * self-declared entries; every other allowed role may change any entry.
+   */
+  private PatientMedicalHistory loadEntryForModify(Long historyId, PatientActor actor) {
+    PatientMedicalHistory history = findEntry(historyId);
+    if (actor.role() == UserRole.PATIENT) {
+      requireOwnerIfPatient(actor, history.getPatient());
+      if (MedicalHistoryResponse.sourceOf(history) != MedicalHistorySource.PATIENT) {
+        throw forbidden();
+      }
+    }
+    return history;
   }
 
   private Patient loadPatient(UUID publicId, PatientActor actor) {
