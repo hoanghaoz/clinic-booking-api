@@ -67,6 +67,9 @@ class ReceptionIntegrationTest extends AbstractIntegrationTest {
     final String doctorUsername = "doc_rec_" + suffix;
     final long doctorUserId = ScheduleTestData.user(jdbc, doctorUsername, password, "DOCTOR");
     final long doctorId = insertDoctor(doctorUserId, specialtyId);
+    final long secondDoctorUserId =
+        ScheduleTestData.user(jdbc, "doc2_rec_" + suffix, password, "DOCTOR");
+    final long secondDoctorId = insertDoctor(secondDoctorUserId, specialtyId);
 
     final String staffAUsername = "staff_a_" + suffix;
     final long staffAUserId =
@@ -146,7 +149,7 @@ class ReceptionIntegrationTest extends AbstractIntegrationTest {
       return jdbc.queryForObject(
           """
           insert into patients (public_id, full_name, date_of_birth, gender, identity_type,
-            identity_number, identity_issuer, phone, address, patient_class,
+            identity_number, identity_issuer, phone, address, class,
             card_number, card_activated_at, card_expires_at, card_revoked_at)
           values (?, ?, '1995-04-12', 'FEMALE', 'CCCD', ?, 'VN', ?, 'TP.HCM', 'PERSONAL',
             ?, ?, ?, ?) returning id
@@ -167,7 +170,8 @@ class ReceptionIntegrationTest extends AbstractIntegrationTest {
           cardRevokedAt == null ? null : Timestamp.from(cardRevokedAt));
     }
 
-    long insertSchedule(long roomId, LocalDate workDate, Instant startAt, Instant endAt) {
+    long insertSchedule(
+        long assignedDoctorId, long roomId, LocalDate workDate, Instant startAt, Instant endAt) {
       return jdbc.queryForObject(
           """
           insert into doctor_schedules (public_id, doctor_id, specialty_id, room_id, shift_id,
@@ -177,7 +181,7 @@ class ReceptionIntegrationTest extends AbstractIntegrationTest {
           """,
           Long.class,
           UUID.randomUUID(),
-          doctorId,
+          assignedDoctorId,
           specialtyId,
           roomId,
           workDate,
@@ -339,6 +343,7 @@ class ReceptionIntegrationTest extends AbstractIntegrationTest {
     long pkgVersionId = f.createMultiOccurrencePackage();
     long scheduleToday =
         f.insertSchedule(
+            f.doctorId,
             f.clinicalRoomA,
             f.today,
             f.now.minus(1, ChronoUnit.HOURS),
@@ -490,6 +495,7 @@ class ReceptionIntegrationTest extends AbstractIntegrationTest {
             null);
     long scheduleB =
         f.insertSchedule(
+            f.secondDoctorId,
             f.clinicalRoomB,
             f.today,
             f.now.minus(30, ChronoUnit.MINUTES),
@@ -518,6 +524,7 @@ class ReceptionIntegrationTest extends AbstractIntegrationTest {
             f.now.minus(1, ChronoUnit.DAYS));
     long scheduleA =
         f.insertSchedule(
+            f.doctorId,
             f.clinicalRoomA,
             f.today,
             f.now.minus(30, ChronoUnit.MINUTES),
