@@ -77,7 +77,6 @@ class MedicalPackageController {
   }
 
   @GetMapping
-  @PreAuthorize("isAuthenticated()")
   @Operation(
       summary = "Tìm kiếm / danh sách gói khám (phân trang)",
       description =
@@ -93,7 +92,6 @@ class MedicalPackageController {
   }
 
   @GetMapping("/{packagePublicId}")
-  @PreAuthorize("isAuthenticated()")
   @Operation(
       summary = "Chi tiết gói khám",
       description = "Phiên bản hiện hành của gói, kèm danh sách hạng mục theo thứ tự hiển thị.")

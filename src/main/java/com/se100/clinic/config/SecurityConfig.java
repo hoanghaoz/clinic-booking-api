@@ -38,7 +38,12 @@ public class SecurityConfig {
 
   /** Read-only lookups that guests may call; every write on these paths stays admin-only. */
   private static final String[] PUBLIC_READ_ENDPOINTS = {
-    "/api/v1/doctors", "/api/v1/doctors/*", "/api/v1/specialties", "/api/v1/specialties/*"
+    "/api/v1/doctors",
+    "/api/v1/doctors/*",
+    "/api/v1/specialties",
+    "/api/v1/specialties/*",
+    "/api/v1/medical-packages",
+    "/api/v1/medical-packages/*"
   };
 
   private static void securityError(HttpServletResponse response, int status, String code)
