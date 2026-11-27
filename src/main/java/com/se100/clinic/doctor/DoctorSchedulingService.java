@@ -2,10 +2,13 @@ package com.se100.clinic.doctor;
 
 import com.se100.clinic.employee.enums.EmployeeStatus;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -19,6 +22,32 @@ public class DoctorSchedulingService {
   @Transactional(readOnly = true)
   public boolean exists(Long doctorId) {
     return entityManager.find(Doctor.class, doctorId) != null;
+  }
+
+  @Transactional(readOnly = true)
+  public String name(Long doctorId) {
+    return entityManager.find(Doctor.class, doctorId).getName();
+  }
+
+  @Transactional(propagation = Propagation.MANDATORY)
+  public boolean lockForBooking(Long doctorId, Long specialtyId) {
+    entityManager.find(Doctor.class, doctorId, LockModeType.PESSIMISTIC_READ);
+    Specialty specialty =
+        entityManager.find(Specialty.class, specialtyId, LockModeType.PESSIMISTIC_READ);
+    return specialty != null && specialty.isActive();
+  }
+
+  @Transactional(readOnly = true)
+  public List<Long> activeSpecialtyIds(Set<Long> requested) {
+    var query =
+        entityManager.createQuery(
+            "select s.id from Specialty s where s.active = true"
+                + (requested.isEmpty() ? "" : " and s.id in :requested"),
+            Long.class);
+    if (!requested.isEmpty()) {
+      query.setParameter("requested", requested);
+    }
+    return query.getResultList();
   }
 
   @Transactional(readOnly = true)

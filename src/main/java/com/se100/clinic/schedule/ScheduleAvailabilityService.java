@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,54 @@ public class ScheduleAvailabilityService {
       int durationMinutes,
       Long shiftId,
       Pageable pageable) {
+    return findWindows(
+        fromDate,
+        toDate,
+        durationMinutes,
+        now ->
+            schedules.list(
+                doctorId,
+                clinicId,
+                specialtyId,
+                fromDate,
+                toDate,
+                ScheduleStatus.OPEN,
+                shiftId,
+                now,
+                pageable));
+  }
+
+  @Transactional(readOnly = true)
+  public Page<AvailableSchedule> findForSpecialties(
+      Long doctorId,
+      Long clinicId,
+      Set<Long> specialtyIds,
+      LocalDate fromDate,
+      LocalDate toDate,
+      int durationMinutes,
+      Pageable pageable) {
+    return findWindows(
+        fromDate,
+        toDate,
+        durationMinutes,
+        now ->
+            schedules.listForSpecialties(
+                doctorId,
+                clinicId,
+                specialtyIds,
+                fromDate,
+                toDate,
+                ScheduleStatus.OPEN,
+                null,
+                now,
+                pageable));
+  }
+
+  private Page<AvailableSchedule> findWindows(
+      LocalDate fromDate,
+      LocalDate toDate,
+      int durationMinutes,
+      Function<Instant, Page<ScheduleDtos.ScheduleResponse>> loadSchedules) {
     if (durationMinutes != 20 && durationMinutes != 30) {
       throw new BusinessException(
           ScheduleErrorCode.INVALID_CAPACITY, "Thời lượng khám phải là 20 hoặc 30 phút");
@@ -56,17 +105,7 @@ public class ScheduleAvailabilityService {
           ScheduleErrorCode.INVALID_DATE_RANGE, "Cần nhập fromDate và toDate");
     }
     Instant now = Instant.now();
-    Page<ScheduleDtos.ScheduleResponse> matches =
-        schedules.list(
-            doctorId,
-            clinicId,
-            specialtyId,
-            fromDate,
-            toDate,
-            ScheduleStatus.OPEN,
-            shiftId,
-            now,
-            pageable);
+    Page<ScheduleDtos.ScheduleResponse> matches = loadSchedules.apply(now);
     return matches.map(
         response -> {
           DoctorSchedule schedule =

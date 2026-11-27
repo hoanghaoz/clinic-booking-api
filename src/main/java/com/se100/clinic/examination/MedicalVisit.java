@@ -12,6 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -129,4 +130,46 @@ class MedicalVisit extends BaseAuditEntity {
 
   @Column(name = "completed_at", columnDefinition = "timestamptz")
   private Instant completedAt;
+
+  @Version
+  @Column(name = "version", nullable = false)
+  private Long version;
+
+  /** COMPLETED and CANCELLED visits are closed: their clinical record is read-only. */
+  boolean isClosed() {
+    return status == MedicalVisitStatus.COMPLETED || status == MedicalVisitStatus.CANCELLED;
+  }
+
+  /** The doctor opens the visit: WAITING becomes IN_PROGRESS and the doctor becomes primary. */
+  void start(Long doctorId) {
+    if (primaryDoctorId == null) {
+      primaryDoctorId = doctorId;
+    }
+    if (status == MedicalVisitStatus.WAITING) {
+      status = MedicalVisitStatus.IN_PROGRESS;
+    }
+  }
+
+  void recordExamination(
+      String symptoms,
+      String clinicalNotes,
+      String initialDiagnosis,
+      String advice,
+      BigDecimal heightCm,
+      BigDecimal weightKg,
+      BigDecimal temperatureC,
+      Integer heartRate,
+      Integer systolicBp,
+      Integer diastolicBp) {
+    this.symptoms = symptoms;
+    this.clinicalNotes = clinicalNotes;
+    this.initialDiagnosis = initialDiagnosis;
+    this.advice = advice;
+    this.heightCm = heightCm;
+    this.weightKg = weightKg;
+    this.temperatureC = temperatureC;
+    this.heartRate = heartRate;
+    this.systolicBp = systolicBp;
+    this.diastolicBp = diastolicBp;
+  }
 }

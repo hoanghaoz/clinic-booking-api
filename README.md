@@ -161,7 +161,7 @@ class ModularityTests {
 | **`doctor`** | Chuyên khoa/Bác sĩ (ChuyenKhoa/BacSi) | **Đầy đủ — module mẫu (Specialty CRUD + phân trang/lọc/sắp xếp + mã lỗi riêng)** |
 | `schedule` | Lịch làm việc, ca, sức chứa slot | Đã triển khai SCH-01–SCH-05, FR-23/24 và lịch/danh sách khám FR-50; xem [schedule API](docs/schedule-api.md) |
 | `patient` | Bệnh nhân, thẻ điện tử, tiền sử bệnh | Chưa tạo |
-| `booking` (`appointment`) | Đặt lịch, Phiếu đặt lịch (QR), hủy/đổi, Waitlist | Có API nội bộ giữ/nhả/đổi slot trong giao dịch; chưa có đầy đủ HTTP booking, QR và waitlist |
+| `booking` (`appointment`) | Đặt lịch, Phiếu đặt lịch (QR), hủy/đổi, Waitlist | [API tìm giờ, tạo lịch và phiếu QR](docs/booking-api.md) (BOOK-01–04). Giữ/nhả/đổi slot dùng service nội bộ |
 | `reception` | Tiếp nhận, Phiếu tiếp nhận, phân luồng | Chưa tạo |
 | `examination` | Khám, chỉ định phát sinh, kết quả CLS, Phiếu kết quả, đơn thuốc | Chưa tạo |
 | `billing` | Tạm ứng, quyết toán, hoàn tiền, hóa đơn | Chưa tạo |

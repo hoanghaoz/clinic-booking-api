@@ -17,6 +17,10 @@ interface MedicalPackageRepository
 
   Optional<MedicalPackage> findByPublicId(UUID publicId);
 
+  @Lock(LockModeType.PESSIMISTIC_READ)
+  @Query("select p from MedicalPackage p where p.publicId = :publicId")
+  Optional<MedicalPackage> findByPublicIdForBooking(@Param("publicId") UUID publicId);
+
   /**
    * Locks the package row ({@code SELECT ... FOR UPDATE}) until the transaction ends. Writers that
    * roll a new version take this first, so concurrent writers of one package run one after the

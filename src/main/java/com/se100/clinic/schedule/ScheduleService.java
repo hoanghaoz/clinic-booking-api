@@ -198,6 +198,29 @@ public class ScheduleService {
       Long shiftId,
       Instant endingAfter,
       Pageable pageable) {
+    return listForSpecialties(
+        doctorId,
+        clinicId,
+        specialtyId == null ? Set.of() : Set.of(specialtyId),
+        fromDate,
+        toDate,
+        status,
+        shiftId,
+        endingAfter,
+        pageable);
+  }
+
+  @Transactional(readOnly = true)
+  public Page<ScheduleResponse> listForSpecialties(
+      Long doctorId,
+      Long clinicId,
+      Set<Long> specialtyIds,
+      LocalDate fromDate,
+      LocalDate toDate,
+      ScheduleStatus status,
+      Long shiftId,
+      Instant endingAfter,
+      Pageable pageable) {
     validateDateRange(fromDate, toDate);
     // Availability filters resources before pagination, so totals and page boundaries remain valid.
     List<Long> workingDoctorIds = endingAfter == null ? null : doctors.workingDoctorIds();
@@ -223,8 +246,8 @@ public class ScheduleService {
           if (roomIds != null) {
             filters.add(root.get("roomId").in(roomIds));
           }
-          if (specialtyId != null) {
-            filters.add(cb.equal(root.get("specialtyId"), specialtyId));
+          if (!specialtyIds.isEmpty()) {
+            filters.add(root.get("specialtyId").in(specialtyIds));
           }
           if (fromDate != null) {
             filters.add(cb.greaterThanOrEqualTo(root.get("workDate"), fromDate));
@@ -331,6 +354,38 @@ public class ScheduleService {
   public void lockForBookingChange(Long scheduleId) {
     lockSchedule(scheduleId);
   }
+
+  @Transactional(propagation = Propagation.MANDATORY)
+  public BookingSchedule lockForBooking(UUID publicId) {
+    DoctorSchedule schedule = requireScheduleForUpdate(publicId);
+    facilities.lockForAssignment(schedule.getRoomId());
+    if (!doctors.lockForBooking(schedule.getDoctorId(), schedule.getSpecialtyId())) {
+      throw new ConflictException(
+          ScheduleErrorCode.SCHEDULE_NOT_OPEN, "Chuyên khoa của ca đã ngừng hoạt động");
+    }
+    return new BookingSchedule(schedule.getId(), toResponse(schedule));
+  }
+
+  @Transactional(readOnly = true)
+  public ScheduleResponse getById(Long id) {
+    return scheduleRepository
+        .findById(id)
+        .map(this::toResponse)
+        .orElseThrow(
+            () -> new NotFoundException(ScheduleErrorCode.SCHEDULE_NOT_FOUND, "Không tìm thấy ca"));
+  }
+
+  @Transactional(readOnly = true)
+  public boolean hasScheduleAtOtherClinic(List<Long> scheduleIds, ScheduleResponse target) {
+    return !scheduleIds.isEmpty()
+        && scheduleRepository.existsByIdInAndWorkDateAndShiftIdAndRoomIdNotIn(
+            scheduleIds,
+            target.workDate(),
+            target.shiftId(),
+            facilities.roomIds(target.clinicId()));
+  }
+
+  public record BookingSchedule(Long id, ScheduleResponse schedule) {}
 
   private DoctorSchedule lockSchedule(Long id) {
     return scheduleRepository

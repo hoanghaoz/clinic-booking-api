@@ -84,6 +84,8 @@ public class SecurityConfig {
         .authorizeHttpRequests(
             auth -> {
               auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
+              auth.requestMatchers("/api/v1/appointments", "/api/v1/appointments/**")
+                  .authenticated();
               auth.requestMatchers(HttpMethod.GET, PUBLIC_READ_ENDPOINTS).permitAll();
               if (tokens != null || production) {
                 auth.anyRequest().authenticated();

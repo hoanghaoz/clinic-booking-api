@@ -151,8 +151,9 @@ flowchart LR
 | Cấu hình cơ sở, phòng, chuyên khoa, bác sĩ, gói khám, lịch làm việc | Có | Phía Admin, đã test |
 | Tìm giờ trống (`GET /api/v1/doctor-schedules/availability`) | Có | Cần đăng nhập |
 | Hàng đợi bác sĩ (`GET /api/v1/doctor-schedules/my/{id}/patients`) | Có | Dữ liệu rỗng vì chưa có lịch hẹn |
-| Đăng ký tài khoản và hồ sơ bệnh nhân | Chưa | Entity và migration đã có |
-| Đặt, hủy, đổi lịch hẹn; danh sách chờ | Chưa | Có `AppointmentReservationService` (nội bộ) |
+| Đăng ký tài khoản và hồ sơ bệnh nhân | Một phần | Đã có đăng ký tài khoản. Liên kết hồ sơ thuộc luồng bệnh nhân |
+| Đặt lịch hẹn và phiếu QR | Có | Xem [API đặt lịch](booking-api.md) |
+| Hủy, đổi lịch hẹn và danh sách chờ | Chưa | Có `AppointmentReservationService` (nội bộ) |
 | Tiếp nhận, khám, chỉ định, kết quả | Chưa | Entity `examination` đã có |
 | Thanh toán, hoàn tiền, hóa đơn | Chưa | Entity `payment` đã có |
 | Vi phạm, khóa đặt lịch, thông báo | Chưa | Entity đã có |

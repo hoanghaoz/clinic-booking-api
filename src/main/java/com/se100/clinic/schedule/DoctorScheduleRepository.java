@@ -3,6 +3,8 @@ package com.se100.clinic.schedule;
 import com.se100.clinic.schedule.enums.ScheduleStatus;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +16,9 @@ import org.springframework.data.repository.query.Param;
 interface DoctorScheduleRepository
     extends JpaRepository<DoctorSchedule, Long>, JpaSpecificationExecutor<DoctorSchedule> {
   Optional<DoctorSchedule> findByPublicId(UUID publicId);
+
+  boolean existsByIdInAndWorkDateAndShiftIdAndRoomIdNotIn(
+      List<Long> ids, LocalDate workDate, Long shiftId, List<Long> clinicRoomIds);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select s from DoctorSchedule s where s.publicId = :publicId")
