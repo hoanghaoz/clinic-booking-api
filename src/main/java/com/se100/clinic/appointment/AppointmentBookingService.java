@@ -225,7 +225,7 @@ public class AppointmentBookingService {
       throw ineligibleProduct();
     }
     Instant endAt = request.startAt().plusSeconds(product.durationMinutes() * 60L);
-    requireNoConflict(patient.id(), schedule, request.startAt(), endAt, now);
+    requireNoConflict(patient.id(), schedule, request.startAt(), endAt, now, 0L);
     Appointment appointment = new Appointment();
     appointment.setCode(
         "AP-" + UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT));
@@ -332,9 +332,37 @@ public class AppointmentBookingService {
     }
   }
 
+  void validateMovedBooking(
+      BookingProfile patient,
+      ScheduleResponse schedule,
+      Instant start,
+      Instant end,
+      Instant now,
+      Long appointmentId) {
+    if (!start.isAfter(now)) {
+      throw new BusinessException(BookingErrorCode.BOOKING_START_IN_PAST, "Giờ khám đã qua");
+    }
+    LocalDate date = start.atZone(zone).toLocalDate();
+    if (date.isAfter(lastBookableDate(patient, now))) {
+      throw new BusinessException(
+          BookingErrorCode.BOOKING_DATE_LIMIT,
+          "Bệnh nhân cá nhân chỉ được đặt trước tối đa 30 ngày");
+    }
+    if (!date.equals(schedule.workDate())) {
+      throw new BusinessException(
+          ScheduleErrorCode.INVALID_WINDOW, "Giờ khám không thuộc ngày của ca");
+    }
+    requireNoConflict(patient.id(), schedule, start, end, now, appointmentId);
+  }
+
   private void requireNoConflict(
-      Long patientId, ScheduleResponse schedule, Instant startAt, Instant endAt, Instant now) {
-    if (appointments.overlaps(patientId, startAt, endAt, now)) {
+      Long patientId,
+      ScheduleResponse schedule,
+      Instant startAt,
+      Instant endAt,
+      Instant now,
+      Long excludedId) {
+    if (appointments.overlaps(patientId, startAt, endAt, now, excludedId)) {
       throw new ConflictException(
           BookingErrorCode.APPOINTMENT_OVERLAP, "Bệnh nhân đã có lịch hẹn trùng giờ");
     }
@@ -344,7 +372,8 @@ public class AppointmentBookingService {
             patientId,
             date.atStartOfDay(zone).toInstant(),
             date.plusDays(1).atStartOfDay(zone).toInstant(),
-            now);
+            now,
+            excludedId);
     if (schedules.hasScheduleAtOtherClinic(sameDay, schedule)) {
       throw new ConflictException(
           BookingErrorCode.APPOINTMENT_OTHER_CLINIC_SAME_SHIFT,
