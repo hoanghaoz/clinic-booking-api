@@ -10,7 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 interface AppointmentRepository extends JpaRepository<Appointment, Long> {
   String ACTIVE_FOR_BOOKING =
       """
-      a.patientId = :patientId and
+      a.patientId = :patientId and a.id <> :excludedId and
       (a.status in ('CONFIRMED', 'CHECKED_IN') or
        (a.status = 'HELD' and a.holdExpiresAt > :now))
       """;
@@ -19,13 +19,16 @@ interface AppointmentRepository extends JpaRepository<Appointment, Long> {
       "select (count(a) > 0) from Appointment a where "
           + ACTIVE_FOR_BOOKING
           + " and a.startAt < :endAt and a.endAt > :startAt")
-  boolean overlaps(Long patientId, Instant startAt, Instant endAt, Instant now);
+  boolean overlaps(Long patientId, Instant startAt, Instant endAt, Instant now, Long excludedId);
 
   @Query(
       "select distinct a.scheduleId from Appointment a where "
           + ACTIVE_FOR_BOOKING
           + " and a.startAt >= :dayStart and a.startAt < :dayEnd")
-  List<Long> activeScheduleIds(Long patientId, Instant dayStart, Instant dayEnd, Instant now);
+  List<Long> activeScheduleIds(
+      Long patientId, Instant dayStart, Instant dayEnd, Instant now, Long excludedId);
+
+  Optional<Appointment> findByPublicId(UUID publicId);
 
   Optional<Appointment> findByPublicIdAndPatientId(UUID publicId, Long patientId);
 
